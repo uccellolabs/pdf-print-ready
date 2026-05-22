@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Générer des PDF propres depuis HTML, la méthode</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --primary: #1D4ED8;
+    --secondary: #0EA5E9;
+    --text: #1a1a1a;
+    --muted: #6b7280;
+    --bg: #FFFFFF;
+    --bg-alt: #F8FAFC;
+    --bg-code: #0F172A;
+    --border: #E5E7EB;
+    --success: #10B981;
+    --warning: #F59E0B;
+    --danger: #EF4444;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: var(--bg-alt); }
+  body {
+    font-family: 'Inter', -apple-system, sans-serif;
+    color: var(--text);
+    line-height: 1.55;
+    font-size: 12.5px;
+  }
+  h1, h2, h3, h4 {
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
+  /* PAGE FIGÉE 297mm, le cœur du pattern */
+  .page {
+    width: 210mm;
+    height: 297mm;
+    min-height: 297mm;
+    max-height: 297mm;
+    padding: 20mm 20mm 14mm;
+    background: var(--bg);
+    margin: 12px auto;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+    overflow: hidden;
+    page-break-after: always;
+    break-after: page;
+  }
+  .page-content { flex: 1 1 auto; min-height: 0; overflow: hidden; }
+  .page-footer {
+    flex: 0 0 auto;
+    margin-top: auto;
+    padding-top: 3mm;
+    min-height: 6mm;
+    display: flex;
+    align-items: flex-end;
+    justify-content: flex-end;
+  }
+  .page-num {
+    font-size: 9.5px;
+    color: var(--muted);
+    letter-spacing: 0.05em;
+    line-height: 1;
+  }
+  .page-header {
+    flex-shrink: 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 9.5px;
+    color: var(--muted);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    margin-bottom: 10mm;
+    min-height: 5mm;
+  }
+  .brand-mark { font-weight: 600; color: var(--primary); }
+
+  /* COVER */
+  .cover {
+    background: linear-gradient(135deg, #0F172A 0%, var(--primary) 100%);
+    color: #fff;
+    padding: 28mm 22mm 16mm 22mm;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .cover .page-num { color: rgba(255,255,255,0.65); }
+  .cover .brand-mark { color: var(--secondary); }
+  .cover .page-header { color: rgba(255,255,255,0.7); margin-bottom: 8mm; }
+  .cover-eyebrow {
+    font-size: 11.5px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--secondary); margin-bottom: 14mm;
+  }
+  .cover-title { font-size: 38px; line-height: 1.1; font-weight: 700; margin-bottom: 8mm; }
+  .cover-sub { font-size: 17px; color: rgba(255,255,255,0.88); margin-bottom: 14mm; line-height: 1.4; }
+  .cover-meta { margin-top: auto; font-size: 11.5px; color: rgba(255,255,255,0.75); }
+  .cover-meta strong { color: #fff; display: block; font-size: 14px; font-weight: 600; margin-bottom: 3px; }
+  .cover-badge {
+    display: inline-block;
+    background: rgba(14,165,233,0.18);
+    border: 1px solid rgba(14,165,233,0.4);
+    border-radius: 4px;
+    padding: 4px 10px;
+    font-size: 10.5px;
+    color: #fff;
+    letter-spacing: 0.06em;
+    margin-bottom: 10mm;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* TITLES */
+  .section-eyebrow {
+    color: var(--primary);
+    font-size: 10px; letter-spacing: 0.14em;
+    text-transform: uppercase; font-weight: 600;
+    margin-bottom: 6px;
+  }
+  h2.section-title { font-size: 24px; line-height: 1.2; margin-bottom: 10px; color: var(--text); }
+  h3.sub-title { font-size: 14px; margin-bottom: 5px; margin-top: 14px; font-weight: 600; }
+  h4.mini-title { font-size: 12.5px; color: var(--primary); margin-bottom: 4px; margin-top: 10px; font-weight: 600; }
+  p { font-size: 12px; margin-bottom: 7px; line-height: 1.6; }
+  p.lead { font-size: 13.5px; margin-bottom: 12px; line-height: 1.55; break-after: avoid; page-break-after: avoid; }
+  p.muted { color: var(--muted); }
+
+  /* LISTS */
+  ul.bullets { list-style: none; padding-left: 0; margin: 6px 0 10px; }
+  ul.bullets li { position: relative; padding-left: 16px; margin-bottom: 6px; font-size: 12px; line-height: 1.55; }
+  ul.bullets li::before {
+    content: ''; position: absolute; left: 0; top: 8px;
+    width: 5px; height: 5px; background: var(--primary); border-radius: 50%;
+  }
+  ul.crosses { list-style: none; padding-left: 0; margin: 6px 0 10px; }
+  ul.crosses li {
+    position: relative; padding-left: 22px; margin-bottom: 6px;
+    font-size: 12px; line-height: 1.55;
+  }
+  ul.crosses li::before {
+    content: '✕'; position: absolute; left: 0; top: 0;
+    color: var(--danger); font-weight: 700; font-size: 13px;
+  }
+  ul.checks { list-style: none; padding-left: 0; margin: 6px 0 10px; }
+  ul.checks li {
+    position: relative; padding-left: 22px; margin-bottom: 6px;
+    font-size: 12px; line-height: 1.55;
+  }
+  ul.checks li::before {
+    content: '✓'; position: absolute; left: 0; top: 0;
+    color: var(--success); font-weight: 700; font-size: 13px;
+  }
+
+  /* CALLOUT */
+  .callout {
+    border-left: 3px solid var(--primary); padding: 11px 14px;
+    background: var(--bg-alt); margin: 10px 0; border-radius: 0 4px 4px 0;
+    page-break-inside: avoid; break-inside: avoid;
+  }
+  .callout p { margin-bottom: 0; font-size: 12px; line-height: 1.55; }
+  .callout strong { color: var(--primary); }
+  .callout.warn { border-left-color: var(--warning); }
+  .callout.warn strong { color: var(--warning); }
+  .callout.danger { border-left-color: var(--danger); background: #FEF2F2; }
+  .callout.danger strong { color: var(--danger); }
+
+  /* LEXIQUE */
+  .lexique {
+    background: #F0F9FF; border-left: 3px solid var(--secondary);
+    border-radius: 0 4px 4px 0; padding: 10px 13px; margin: 10px 0;
+    page-break-inside: avoid; break-inside: avoid;
+  }
+  .lexique::before {
+    content: 'POUR MIEUX COMPRENDRE';
+    display: block; font-size: 9.5px; color: var(--secondary);
+    letter-spacing: 0.12em; font-weight: 600; margin-bottom: 6px;
+    font-family: 'Space Grotesk', sans-serif;
+  }
+  .lexique .term { font-size: 11px; line-height: 1.5; margin-bottom: 5px; }
+  .lexique .term:last-child { margin-bottom: 0; }
+  .lexique .term strong { color: var(--primary); font-weight: 600; }
+  .lexique .term em { font-style: italic; color: var(--muted); font-weight: 400; }
+
+  /* CODE BLOCK */
+  .code {
+    background: var(--bg-code);
+    color: #E2E8F0;
+    border-radius: 5px;
+    padding: 11px 14px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    line-height: 1.55;
+    margin: 8px 0 10px;
+    white-space: pre;
+    overflow: hidden;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+  .code .c { color: #94A3B8; }       /* comment */
+  .code .k { color: #93C5FD; }       /* keyword */
+  .code .s { color: #86EFAC; }       /* string */
+  .code .n { color: #FCD34D; }       /* number */
+  .code .p { color: #F472B6; }       /* property/important */
+
+  /* AVANT/APRÈS */
+  .comparison {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin: 10px 0 12px;
+  }
+  .compare-card {
+    border-radius: 5px;
+    padding: 11px 13px;
+    font-size: 11.5px;
+    line-height: 1.5;
+  }
+  .compare-card.bad {
+    background: #FEF2F2;
+    border-left: 3px solid var(--danger);
+  }
+  .compare-card.good {
+    background: #F0FDF4;
+    border-left: 3px solid var(--success);
+  }
+  .compare-card .label {
+    font-size: 9.5px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    font-weight: 600;
+    margin-bottom: 6px;
+    font-family: 'Space Grotesk', sans-serif;
+  }
+  .compare-card.bad .label { color: var(--danger); }
+  .compare-card.good .label { color: var(--success); }
+  .compare-card p { font-size: 11.5px; margin-bottom: 0; line-height: 1.5; }
+
+  /* RULES BLOCK */
+  .rule-block {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 12px 15px;
+    margin: 10px 0;
+    background: var(--bg);
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+  .rule-block .rule-num {
+    display: inline-block;
+    background: var(--primary);
+    color: #fff;
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 700;
+    font-size: 11px;
+    width: 22px; height: 22px;
+    line-height: 22px;
+    text-align: center;
+    border-radius: 4px;
+    margin-right: 8px;
+  }
+  .rule-block .rule-title {
+    display: inline;
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .rule-block .rule-body { margin-top: 8px; }
+
+  /* CTA */
+  .cta-block {
+    background: linear-gradient(135deg, #F8FAFC 0%, #EFF6FF 100%);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 18px;
+    margin: 14px 0;
+  }
+  .cta-block h4 {
+    font-size: 14px;
+    color: var(--primary);
+    margin-bottom: 6px;
+    font-weight: 600;
+  }
+  .cta-block p { font-size: 12px; margin-bottom: 8px; }
+  .cta-block .cta-link {
+    color: var(--primary);
+    font-weight: 600;
+    text-decoration: none;
+    font-size: 12px;
+  }
+
+  /* TABLES */
+  table { width: 100%; border-collapse: collapse; margin: 8px 0 12px 0; }
+  table th, table td { padding: 6px 9px; font-size: 11px; }
+  table th {
+    background: var(--bg-alt); text-align: left;
+    font-weight: 600; color: var(--text);
+    border-bottom: 1px solid var(--border);
+  }
+  table td { border-bottom: 1px solid var(--border); vertical-align: top; line-height: 1.5; }
+  table tr:last-child td { border-bottom: none; }
+  table thead { display: table-header-group; }
+  table tr { break-inside: avoid; page-break-inside: avoid; }
+
+  /* Anti-orphelins */
+  p, li { orphans: 3; widows: 3; }
+
+  @media screen {
+    .page:not(.cover) { overflow: auto; }
+  }
+  @media print {
+    html, body { margin: 0; padding: 0; background: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    @page { size: 210mm 297mm; margin: 0; }
+    .page { width: 210mm; height: 297mm; margin: 0 auto; box-shadow: none; overflow: hidden; page-break-after: always; break-after: page; }
+    .page.cover { background: linear-gradient(135deg, #0F172A 0%, #1D4ED8 100%) !important; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ========== PAGE 1 : COUVERTURE ========== -->
+<section class="page cover">
+  <div class="page-header">
+    <span class="brand-mark">UCCELLO LABS</span>
+    <span>Mini guide · open source</span>
+  </div>
+  <div class="page-content">
+    <span class="cover-badge">SKILL CLAUDE · OPEN SOURCE · MIT</span>
+    <div class="cover-eyebrow">Mini guide</div>
+    <h1 class="cover-title">Générer des PDF propres depuis HTML.</h1>
+    <p class="cover-sub">Cinq règles et un script JS court pour des livrables A4 sans coupures bizarres, sans espaces vides forcés, sans numérotation manuelle.</p>
+    <div class="cover-meta">
+      <strong>Uccello Labs</strong>
+      Skill open source <code>pdf-print-ready</code> · uccellolabs.com<br>
+      Document généré par le skill lui-même, comme méta-preuve.
+    </div>
+  </div>
+  <footer class="page-footer">
+    <div class="page-num" data-sheet-num></div>
+  </footer>
+</section>
+
+<!-- ========== PAGE 2 : LE CONSTAT ========== -->
+<section class="page">
+  <div class="page-header">
+    <span class="brand-mark">UCCELLO LABS</span>
+    <span>Mini guide pdf-print-ready</span>
+  </div>
+  <div class="page-content">
+    <div class="section-eyebrow">01 · Le constat</div>
+    <h2 class="section-title">Pourquoi tes PDF sont moches.</h2>
+    <p class="lead">Tu écris un beau HTML. Tu fais ⌘P. Tu sauves en PDF. Le résultat est cassé. Tu n'es pas seul.</p>
+
+    <p>Voici les quatre pièges qu'on retrouve dans la plupart des PDF générés depuis HTML, dont les tiens probablement :</p>
+
+    <ul class="crosses">
+      <li><strong>Espaces blancs énormes</strong> au milieu des pages, sans raison apparente. Le numéro de page flotte tout en bas, le contenu se tasse en haut.</li>
+      <li><strong>Coupures malheureuses</strong> entre les pages. Un titre seul en bas, son contenu à la page suivante. Une ligne de tableau coupée en deux.</li>
+      <li><strong>Numéros de page en dur</strong> (<code>"02 / 10"</code>, <code>"03 / 10"</code>...). Tu ajoutes une page, tu dois tout réécrire à la main. Tu finis par oublier.</li>
+      <li><strong>Couleurs qui sautent</strong> à l'impression. Le dégradé de la couverture devient blanc. Les fonds colorés disparaissent.</li>
+    </ul>
+
+    <h3 class="sub-title">Pourquoi ça arrive</h3>
+    <p>Le navigateur ne sait pas où couper. CSS <code>min-height: 297mm</code> laisse le contenu déborder, Chrome ajoute des pages silencieusement, ta numérotation explose. <code>position: absolute</code> sur le footer crée des trous. <code>page-break-inside: avoid</code> mal placé force des sauts brutaux.</p>
+
+    <div class="callout warn">
+      <p><strong>La vraie cause.</strong> CSS print n'est pas une option de CSS standard. C'est un sous-système avec ses règles propres (breaks, page-headers, orphans, widows). Sans la recette, on bricole. Avec la recette, ça tient.</p>
+    </div>
+
+    <h3 class="sub-title">Ce que tu vas trouver dans ce guide</h3>
+    <ul class="bullets">
+      <li>Cinq règles d'or qui éliminent 90% des problèmes</li>
+      <li>Un script JS court (moins de 20 lignes) pour la numérotation automatique</li>
+      <li>Un skill Claude open source qui applique tout ça pour toi</li>
+    </ul>
+  </div>
+  <footer class="page-footer">
+    <div class="page-num" data-sheet-num></div>
+  </footer>
+</section>
+
+<!-- ========== PAGE 3 : RÈGLES 1 + 2 ========== -->
+<section class="page">
+  <div class="page-header">
+    <span class="brand-mark">UCCELLO LABS</span>
+    <span>Mini guide pdf-print-ready</span>
+  </div>
+  <div class="page-content">
+    <div class="section-eyebrow">02 · Les règles d'or</div>
+    <h2 class="section-title">Figer la page, structurer la mise en page.</h2>
+
+    <div class="rule-block">
+      <span class="rule-num">1</span><span class="rule-title">La page A4 est figée à 297mm, pas extensible.</span>
+      <div class="rule-body">
+        <p>Le piège : <code>min-height: 297mm</code> seul. Le contenu peut déborder, Chrome ajoute des pages silencieusement, la numérotation explose. Aucun signal visuel pour te dire "tu as trop écrit".</p>
+        <p>La règle : combiner <code>height + min-height + max-height: 297mm</code> avec <code>overflow: hidden</code>. Si le contenu déborde, il est tronqué visuellement à l'écran. Tu vois immédiatement qu'il faut splitter en deux pages.</p>
+        <div class="code"><span class="c">/* La règle d'or */</span>
+<span class="p">.page</span> {
+  <span class="k">width</span>: <span class="n">210mm</span>;
+  <span class="k">height</span>: <span class="n">297mm</span>;
+  <span class="k">min-height</span>: <span class="n">297mm</span>;
+  <span class="k">max-height</span>: <span class="n">297mm</span>;
+  <span class="k">overflow</span>: hidden;
+  <span class="k">page-break-after</span>: always;
+}</div>
+      </div>
+    </div>
+
+    <div class="rule-block">
+      <span class="rule-num">2</span><span class="rule-title">Structure flexbox content + footer, jamais position absolute.</span>
+      <div class="rule-body">
+        <p>Le piège : positionner <code>.page-num</code> en <code>position: absolute; bottom: 6mm</code>. Le numéro flotte en bas mais le contenu au-dessus s'aligne en haut. Espace vide entre les deux, visible et moche.</p>
+        <p>La règle : trois niveaux en flexbox column. Le <code>.page-content</code> prend tout l'espace disponible, le <code>.page-footer</code> se cale en bas via <code>margin-top: auto</code>.</p>
+        <div class="code"><span class="p">.page</span> { <span class="k">display</span>: flex; <span class="k">flex-direction</span>: column; }
+<span class="p">.page-content</span> { <span class="k">flex</span>: <span class="n">1</span> <span class="n">1</span> auto; <span class="k">min-height</span>: <span class="n">0</span>; }
+<span class="p">.page-footer</span> { <span class="k">margin-top</span>: auto; }</div>
+        <div class="lexique">
+          <p class="term"><strong>Flexbox column</strong> : disposition verticale où les éléments s'empilent. Avec <code>flex: 1 1 auto</code>, un enfant prend tout l'espace restant. Avec <code>margin-top: auto</code>, un autre enfant est poussé en bas.</p>
+          <p class="term"><strong>margin-top: auto</strong> <em>(dans un contexte flex)</em> : c'est le poussoir magique. L'élément se cale en bas du conteneur sans avoir besoin de <code>position: absolute</code>.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+  <footer class="page-footer">
+    <div class="page-num" data-sheet-num></div>
+  </footer>
+</section>
+
+<!-- ========== PAGE 4 : RÈGLE 3 ========== -->
+<section class="page">
+  <div class="page-header">
+    <span class="brand-mark">UCCELLO LABS</span>
+    <span>Mini guide pdf-print-ready</span>
+  </div>
+  <div class="page-content">
+    <div class="section-eyebrow">02 · Les règles d'or (suite)</div>
+    <h2 class="section-title">Numéroter automatiquement.</h2>
+
+    <div class="rule-block">
+      <span class="rule-num">3</span><span class="rule-title">Plus jamais de numéro de page en dur.</span>
+      <div class="rule-body">
+        <p>Le piège : écrire <code>"02 / 10"</code>, <code>"03 / 10"</code> à la main dans chaque footer. Tu ajoutes une page, tu dois tout réécrire. Tu déplaces une section, tu casses la numérotation. Tu oublies un footer, le lecteur voit le bug.</p>
+        <p>La règle : laisser les footers vides avec un attribut <code>data-sheet-num</code>, et un script JS court (moins de 20 lignes) qui compte les pages au chargement et juste avant l'impression.</p>
+
+        <div class="comparison">
+          <div class="compare-card bad">
+            <div class="label">À éviter</div>
+            <p><code>&lt;div class="page-num"&gt;02 / 10&lt;/div&gt;</code></p>
+            <p style="margin-top: 4px; color: var(--muted);">À actualiser manuellement à chaque modif de la structure.</p>
+          </div>
+          <div class="compare-card good">
+            <div class="label">À faire</div>
+            <p><code>&lt;div class="page-num" data-sheet-num&gt;&lt;/div&gt;</code></p>
+            <p style="margin-top: 4px; color: var(--muted);">Vide en HTML. Rempli par le script JS automatiquement.</p>
+          </div>
+        </div>
+
+        <p><strong>Le script JS à coller juste avant <code>&lt;/body&gt;</code> :</strong></p>
+        <div class="code"><span class="k">&lt;script&gt;</span>
+(<span class="k">function</span> () {
+  <span class="k">function</span> <span class="p">pad</span>(n) { <span class="k">return</span> <span class="p">String</span>(n).<span class="p">padStart</span>(<span class="n">2</span>, <span class="s">'0'</span>); }
+  <span class="k">function</span> <span class="p">numberSheets</span>() {
+    <span class="k">var</span> sheets = document.<span class="p">querySelectorAll</span>(<span class="s">'.page'</span>);
+    <span class="k">var</span> total = sheets.length;
+    sheets.<span class="p">forEach</span>(<span class="k">function</span> (sheet, index) {
+      <span class="k">var</span> el = sheet.<span class="p">querySelector</span>(<span class="s">'[data-sheet-num]'</span>);
+      <span class="k">if</span> (el) el.textContent = <span class="p">pad</span>(index + <span class="n">1</span>) + <span class="s">' / '</span> + <span class="p">pad</span>(total);
+    });
+  }
+  <span class="k">if</span> (document.readyState === <span class="s">'loading'</span>) {
+    document.<span class="p">addEventListener</span>(<span class="s">'DOMContentLoaded'</span>, numberSheets);
+  } <span class="k">else</span> { <span class="p">numberSheets</span>(); }
+  window.<span class="p">addEventListener</span>(<span class="s">'beforeprint'</span>, numberSheets);
+})();
+<span class="k">&lt;/script&gt;</span></div>
+
+        <p><strong>Bénéfices :</strong></p>
+        <ul class="checks">
+          <li>Ajouter, retirer ou déplacer une page : zéro update manuel</li>
+          <li>Pad à deux chiffres ("01 / 13" plutôt que "1 / 13"), typographique</li>
+          <li><code>beforeprint</code> recalcule juste avant le PDF, garanti à jour</li>
+          <li>Réutilisable pour mentionner le total ailleurs (<code>data-total-pages</code>)</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <footer class="page-footer">
+    <div class="page-num" data-sheet-num></div>
+  </footer>
+</section>
+
+<!-- ========== PAGE 5 : RÈGLES 4 + 5 ========== -->
+<section class="page">
+  <div class="page-header">
+    <span class="brand-mark">UCCELLO LABS</span>
+    <span>Mini guide pdf-print-ready</span>
+  </div>
+  <div class="page-content">
+    <div class="section-eyebrow">02 · Les règles d'or (fin)</div>
+    <h2 class="section-title">Anti-orphelins et tables propres.</h2>
+
+    <div class="rule-block">
+      <span class="rule-num">4</span><span class="rule-title">Empêcher les orphelins de titre.</span>
+      <div class="rule-body">
+        <p>Le piège : un titre seul en bas de page, son contenu sur la page suivante. Lecteur confus.</p>
+        <p>La règle : <code>break-after: avoid</code> sur tous les titres et leads. Le navigateur garde le titre solidaire du contenu qui suit.</p>
+        <div class="code"><span class="p">h1, h2, h3, h4</span> {
+  <span class="k">break-after</span>: avoid;
+  <span class="k">page-break-after</span>: avoid;
+}
+<span class="p">p.lead, .section-eyebrow + h2.section-title</span> {
+  <span class="k">break-after</span>: avoid;
+}
+<span class="p">p, li</span> { <span class="k">orphans</span>: <span class="n">3</span>; <span class="k">widows</span>: <span class="n">3</span>; }</div>
+        <div class="lexique">
+          <p class="term"><strong>Orphelin</strong> : première ligne d'un paragraphe seule en bas de page.</p>
+          <p class="term"><strong>Veuve</strong> : dernière ligne d'un paragraphe seule en haut de page suivante.</p>
+          <p class="term"><strong>orphans / widows</strong> <em>(propriétés CSS)</em> : nombre minimum de lignes à garder ensemble. Valeur 3 est confortable.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="rule-block">
+      <span class="rule-num">5</span><span class="rule-title">Tables : lignes indivisibles, thead répété.</span>
+      <div class="rule-body">
+        <p>Le piège : un tableau long est coupé entre deux pages, une ligne au milieu. La suite manque son en-tête, illisible.</p>
+        <p>La règle : <code>break-inside: avoid</code> sur chaque <code>tr</code>, et <code>display: table-header-group</code> sur le <code>thead</code> qui le fait se répéter en haut de la page suivante.</p>
+        <div class="code"><span class="p">table</span> { <span class="k">break-inside</span>: auto; }
+<span class="p">table thead</span> { <span class="k">display</span>: table-header-group; }
+<span class="p">table tr</span> { <span class="k">break-inside</span>: avoid; }</div>
+      </div>
+    </div>
+
+    <div class="callout">
+      <p><strong>Et la couleur en print ?</strong> Ajouter <code>-webkit-print-color-adjust: exact</code> et <code>print-color-adjust: exact</code> dans <code>@media print</code>. Sans ça, Chrome décolore les fonds et les dégradés sautent. Le PDF devient blanc et triste.</p>
+    </div>
+  </div>
+  <footer class="page-footer">
+    <div class="page-num" data-sheet-num></div>
+  </footer>
+</section>
+
+<!-- ========== PAGE 6 : CHECKLIST + CTA ========== -->
+<section class="page">
+  <div class="page-header">
+    <span class="brand-mark">UCCELLO LABS</span>
+    <span>Mini guide pdf-print-ready</span>
+  </div>
+  <div class="page-content">
+    <div class="section-eyebrow">03 · Pour aller plus vite</div>
+    <h2 class="section-title">La checklist et le skill.</h2>
+
+    <p class="lead">Tu peux appliquer ces cinq règles à la main dans chaque livrable que tu génères. Ça marche. Mais tu peux aussi installer le skill open source qui le fait pour toi en une commande.</p>
+
+    <h3 class="sub-title">Check-list avant de remettre un livrable PDF</h3>
+    <ul class="checks">
+      <li>Page A4 figée à <code>height/min/max-height: 297mm</code> + <code>overflow: hidden</code></li>
+      <li>Structure <code>.page &gt; .page-content + .page-footer</code> en flexbox column</li>
+      <li>Footer calé via <code>margin-top: auto</code> (pas <code>position: absolute</code>)</li>
+      <li><code>break-after: avoid</code> sur tous les titres et leads</li>
+      <li>Tables avec <code>thead { display: table-header-group }</code> et <code>tr { break-inside: avoid }</code></li>
+      <li><code>@page { size: 210mm 297mm; margin: 0 }</code></li>
+      <li><code>-webkit-print-color-adjust: exact</code> dans <code>@media print</code></li>
+      <li>Numérotation automatique via JS (<code>data-sheet-num</code>, zéro numéro en dur)</li>
+      <li>Aucun em-dash (tiret cadratin) dans le texte français</li>
+      <li>Chaque page calibrée 80 à 95% de la hauteur A4</li>
+    </ul>
+
+    <div class="cta-block">
+      <h4>Installer le skill pdf-print-ready</h4>
+      <p>Skill Claude open source (licence MIT). Il scaffold tout ça pour toi, et ajoute des pre-flight checks anti-erreurs (em-dash, identité légale sourcée SIRENE, créneaux calendrier vérifiés, chiffres marché sourcés).</p>
+      <div class="code" style="margin: 6px 0 8px;">curl -sL https://raw.githubusercontent.com/uccellolabs/pdf-print-ready/main/install.sh | bash -s -- both</div>
+      <p style="font-size: 11px; color: var(--muted);">Compatible Claude Code et Cursor. Fork et PR bienvenus.</p>
+    </div>
+
+    <div class="cta-block" style="background: linear-gradient(135deg, #EFF6FF 0%, #DBEAFE 100%);">
+      <h4>Découvrir Uccello Crew, l'équipe IA complète</h4>
+      <p>Ce skill fait partie d'une suite plus large : 25 skills Claude qui couvrent le cycle commercial B2B complet, de la recherche d'idées d'offre à la proposition signée. Elle t'aide à mieux faire ce que tu sais déjà faire, elle ne bosse pas à ta place. Si tu veux la stack complète installée chez toi :</p>
+      <p style="margin-top: 4px;"><a class="cta-link" href="https://uccellolabs.com">→ uccellolabs.com</a></p>
+    </div>
+
+    <p class="muted" style="margin-top: 14px; font-size: 10.5px; text-align: center;">
+      Ce mini guide a été généré avec <code>pdf-print-ready</code> lui-même. Méta-preuve : si le rendu te paraît propre, le skill fait son travail.
+    </p>
+  </div>
+  <footer class="page-footer">
+    <div class="page-num" data-sheet-num></div>
+  </footer>
+</section>
+
+<script>
+(function () {
+  function pad(n) { return String(n).padStart(2, '0'); }
+  function numberSheets() {
+    var sheets = document.querySelectorAll('.page');
+    var total = sheets.length;
+    sheets.forEach(function (sheet, index) {
+      var el = sheet.querySelector('[data-sheet-num]');
+      if (el) el.textContent = pad(index + 1) + ' / ' + pad(total);
+    });
+    document.querySelectorAll('[data-total-pages]').forEach(function (el) {
+      el.textContent = String(total);
+    });
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', numberSheets);
+  } else {
+    numberSheets();
+  }
+  window.addEventListener('beforeprint', numberSheets);
+})();
+</script>
+</body>
+</html>

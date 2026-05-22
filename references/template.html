@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{document_title}}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --primary: {{primary_color|#1D4ED8}};
+    --secondary: {{secondary_color|#0EA5E9}};
+    --text: {{text_color|#1a1a1a}};
+    --muted: {{muted_color|#6b7280}};
+    --bg: {{bg_color|#FFFFFF}};
+    --bg-alt: {{bg_alt_color|#F8FAFC}};
+    --border: #E5E7EB;
+    --success: #10B981;
+    --warning: #F59E0B;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: var(--bg-alt); }
+  body {
+    font-family: '{{body_font|Inter}}', -apple-system, sans-serif;
+    color: var(--text);
+    line-height: 1.55;
+    font-size: 12.5px;
+  }
+  h1, h2, h3, h4 {
+    font-family: '{{header_font|Space Grotesk}}', sans-serif;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
+  /* RÈGLE D'OR : la page A4 est FIGÉE à 297mm, pas extensible */
+  .page {
+    width: 210mm;
+    height: 297mm;
+    min-height: 297mm;
+    max-height: 297mm;
+    padding: 20mm 20mm 14mm;
+    background: var(--bg);
+    margin: 12px auto;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+    overflow: hidden;
+    page-break-after: always;
+    break-after: page;
+  }
+  .page-content { flex: 1 1 auto; min-height: 0; overflow: hidden; }
+  .page-footer {
+    flex: 0 0 auto;
+    margin-top: auto;
+    padding-top: 3mm;
+    min-height: 6mm;
+    display: flex;
+    align-items: flex-end;
+    justify-content: flex-end;
+  }
+  .page-num {
+    font-size: 9.5px;
+    color: var(--muted);
+    letter-spacing: 0.05em;
+    line-height: 1;
+  }
+  .page-header {
+    flex-shrink: 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 9.5px;
+    color: var(--muted);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    margin-bottom: 10mm;
+    min-height: 5mm;
+  }
+  .brand-mark { font-weight: 600; color: var(--primary); }
+
+  /* COVER */
+  .cover {
+    background: linear-gradient(135deg, #0F172A 0%, var(--primary) 100%);
+    color: #fff;
+    padding: 28mm 22mm 16mm 22mm;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .cover .page-num { color: rgba(255,255,255,0.65); }
+  .cover .brand-mark { color: var(--secondary); }
+  .cover .page-header { color: rgba(255,255,255,0.7); margin-bottom: 8mm; }
+  .cover-eyebrow {
+    font-size: 11.5px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--secondary); margin-bottom: 12mm;
+  }
+  .cover-title { font-size: 38px; line-height: 1.1; font-weight: 700; margin-bottom: 6mm; }
+  .cover-sub { font-size: 17px; color: rgba(255,255,255,0.85); margin-bottom: 14mm; line-height: 1.4; }
+  .cover-meta { margin-top: auto; font-size: 11.5px; color: rgba(255,255,255,0.75); }
+  .cover-meta strong { color: #fff; display: block; font-size: 14px; font-weight: 600; margin-bottom: 3px; }
+
+  /* TITLES */
+  .section-eyebrow {
+    color: var(--primary);
+    font-size: 10px; letter-spacing: 0.14em;
+    text-transform: uppercase; font-weight: 600;
+    margin-bottom: 6px;
+  }
+  h2.section-title { font-size: 22px; line-height: 1.25; margin-bottom: 10px; color: var(--text); }
+  h3.sub-title { font-size: 14px; margin-bottom: 5px; margin-top: 12px; font-weight: 600; }
+  h4.mini-title { font-size: 12.5px; color: var(--primary); margin-bottom: 4px; margin-top: 8px; font-weight: 600; }
+  p { font-size: 12px; margin-bottom: 6px; line-height: 1.55; }
+  p.lead { font-size: 13px; margin-bottom: 10px; line-height: 1.55; break-after: avoid; page-break-after: avoid; }
+  p.muted { color: var(--muted); }
+
+  /* TABLES */
+  table { width: 100%; border-collapse: collapse; margin: 8px 0 12px 0; }
+  table th {
+    background: var(--bg-alt); text-align: left;
+    padding: 6px 9px; font-weight: 600; color: var(--text);
+    border-bottom: 1px solid var(--border); font-size: 11px;
+  }
+  table td { padding: 6px 9px; border-bottom: 1px solid var(--border); vertical-align: top; line-height: 1.5; font-size: 11px; }
+  table tr:last-child td { border-bottom: none; }
+  table thead { display: table-header-group; }
+  table tr { break-inside: avoid; page-break-inside: avoid; }
+  table { break-inside: auto; page-break-inside: auto; }
+
+  /* LISTS */
+  ul.bullets { list-style: none; padding-left: 0; margin: 6px 0; }
+  ul.bullets li { position: relative; padding-left: 15px; margin-bottom: 5px; font-size: 12px; line-height: 1.55; }
+  ul.bullets li::before {
+    content: ''; position: absolute; left: 0; top: 8px;
+    width: 5px; height: 5px; background: var(--primary); border-radius: 50%;
+  }
+
+  /* BLOCS UTILITAIRES */
+  .callout {
+    border-left: 3px solid var(--primary); padding: 10px 13px;
+    background: var(--bg-alt); margin: 10px 0; border-radius: 0 4px 4px 0;
+  }
+  .callout p { margin-bottom: 0; font-size: 12px; line-height: 1.55; }
+  .callout strong { color: var(--primary); }
+  .callout.warn { border-left-color: var(--warning); }
+  .callout.warn strong { color: var(--warning); }
+
+  .lexique {
+    background: #F0F9FF; border-left: 3px solid var(--secondary);
+    border-radius: 0 4px 4px 0; padding: 10px 13px; margin: 10px 0;
+    page-break-inside: avoid; break-inside: avoid;
+  }
+  .lexique::before {
+    content: 'POUR MIEUX COMPRENDRE';
+    display: block; font-size: 9.5px; color: var(--secondary);
+    letter-spacing: 0.12em; font-weight: 600; margin-bottom: 6px;
+    font-family: '{{header_font|Space Grotesk}}', sans-serif;
+  }
+  .lexique .term { font-size: 11px; line-height: 1.5; margin-bottom: 5px; }
+  .lexique .term strong { color: var(--primary); font-weight: 600; }
+  .lexique .term em { font-style: italic; color: var(--muted); font-weight: 400; }
+
+  /* ANTI-ORPHELINS */
+  p, li { orphans: 3; widows: 3; }
+  .callout, .toc, .lexique, .keep-together { page-break-inside: avoid; break-inside: avoid; }
+
+  @media screen {
+    .page:not(.cover) { overflow: auto; }
+  }
+  @media print {
+    html, body { margin: 0; padding: 0; background: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    @page { size: 210mm 297mm; margin: 0; }
+    .page { width: 210mm; height: 297mm; margin: 0 auto; box-shadow: none; overflow: hidden; page-break-after: always; break-after: page; }
+    .page.cover { background: linear-gradient(135deg, #0F172A 0%, {{primary_color|#1D4ED8}} 100%) !important; }
+  }
+</style>
+</head>
+<body>
+
+<!-- =========================================
+     PAGE 1 : COUVERTURE (exemple)
+     ========================================= -->
+<section class="page cover">
+  <div class="page-header">
+    <span class="brand-mark">{{brand_mark|MARQUE}}</span>
+    <span>{{cover_meta|Confidentiel}}</span>
+  </div>
+  <div class="page-content">
+    <div class="cover-eyebrow">{{cover_eyebrow|Document}}</div>
+    <h1 class="cover-title">{{cover_title|Titre du document}}</h1>
+    <p class="cover-sub">{{cover_sub|Sous-titre ou accroche descriptive du document.}}</p>
+    <div class="cover-meta">
+      <strong>{{author_name|Auteur}}</strong>
+      {{author_role|Rôle}} · {{author_email|email@example.com}}<br>
+      {{emission_date|Émis le JJ/MM/AAAA}}
+    </div>
+  </div>
+  <footer class="page-footer">
+    <div class="page-num" data-sheet-num></div>
+  </footer>
+</section>
+
+<!-- =========================================
+     PAGE 2 : EXEMPLE DE SECTION STANDARD
+     ========================================= -->
+<section class="page">
+  <div class="page-header">
+    <span class="brand-mark">{{brand_mark|MARQUE}}</span>
+    <span>{{header_subtitle|Document · Date}}</span>
+  </div>
+  <div class="page-content">
+    <div class="section-eyebrow">01 · Titre de section</div>
+    <h2 class="section-title">Titre principal de la page.</h2>
+    <p class="lead">Paragraphe d'introduction de la section, légèrement plus gros que le corps de texte, pour planter le contexte.</p>
+
+    <h3 class="sub-title">Un sous-titre</h3>
+    <p>Corps de texte standard. Phrase courte. Phrase moyenne pour ajuster la respiration. Phrase plus longue qui développe une idée en profondeur sans alourdir.</p>
+
+    <div class="callout">
+      <p><strong>Note importante.</strong> Encadré informatif pour attirer l'attention sur un point clé.</p>
+    </div>
+
+    <div class="lexique">
+      <p class="term"><strong>Terme technique</strong> : définition claire et courte.</p>
+      <p class="term"><strong>Autre terme</strong> <em>(traduction)</em> : définition.</p>
+    </div>
+  </div>
+  <footer class="page-footer">
+    <div class="page-num" data-sheet-num></div>
+  </footer>
+</section>
+
+<!-- =========================================
+     PAGES SUIVANTES : DUPLIQUER LE PATTERN
+     ========================================= -->
+
+<script>
+(function () {
+  function pad(n) { return String(n).padStart(2, '0'); }
+  function numberSheets() {
+    var sheets = document.querySelectorAll('.page');
+    var total = sheets.length;
+    sheets.forEach(function (sheet, index) {
+      var el = sheet.querySelector('[data-sheet-num]');
+      if (el) el.textContent = pad(index + 1) + ' / ' + pad(total);
+    });
+    document.querySelectorAll('[data-total-pages]').forEach(function (el) {
+      el.textContent = String(total);
+    });
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', numberSheets);
+  } else {
+    numberSheets();
+  }
+  window.addEventListener('beforeprint', numberSheets);
+})();
+</script>
+</body>
+</html>
