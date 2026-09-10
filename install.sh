@@ -19,9 +19,10 @@ install_for() {
     *) echo "❌ Cible inconnue : $kind"; exit 1 ;;
   esac
 
-  mkdir -p "$dir/references"
+  mkdir -p "$dir/references" "$dir/scripts"
   curl -fsSL "$REPO_URL/SKILL.md" -o "$dir/SKILL.md"
   curl -fsSL "$REPO_URL/references/template.html" -o "$dir/references/template.html" 2>/dev/null || true
+  curl -fsSL "$REPO_URL/scripts/rendre_pdf.py" -o "$dir/scripts/rendre_pdf.py" 2>/dev/null && chmod +x "$dir/scripts/rendre_pdf.py" || true
 
   echo "✅ $kind : skill installé dans $dir"
 }

@@ -10,6 +10,7 @@ Ce skill scaffold un HTML qui s'imprime en PDF impeccable via Chrome (⌘P, marg
 - Anti-orphelins (`break-after: avoid` sur titres, leads, eyebrows).
 - Tables avec lignes indivisibles et thead répété si coupure.
 - Pre-flight checks anti-erreurs : em-dash français, identité légale sourcée SIRENE, créneaux calendrier vérifiés, chiffres marché sourcés ou retirés.
+- Un script, `scripts/rendre_pdf.py`, qui mesure le remplissage et le débordement de chaque page dans le DOM (Chrome headless), imprime le PDF et rend un aperçu PNG par page. Une commande, un code de retour.
 
 ## Pour qui
 
@@ -23,12 +24,18 @@ Ce skill scaffold un HTML qui s'imprime en PDF impeccable via Chrome (⌘P, marg
 ### Claude Code
 
 ```bash
-mkdir -p ~/.claude/skills/pdf-print-ready
+mkdir -p ~/.claude/skills/pdf-print-ready/references ~/.claude/skills/pdf-print-ready/scripts
 curl -sL https://raw.githubusercontent.com/uccellolabs/pdf-print-ready/main/SKILL.md \
   -o ~/.claude/skills/pdf-print-ready/SKILL.md
 curl -sL https://raw.githubusercontent.com/uccellolabs/pdf-print-ready/main/references/template.html \
   -o ~/.claude/skills/pdf-print-ready/references/template.html
+curl -sL https://raw.githubusercontent.com/uccellolabs/pdf-print-ready/main/scripts/rendre_pdf.py \
+  -o ~/.claude/skills/pdf-print-ready/scripts/rendre_pdf.py
 ```
+
+Ou en une ligne, pour Claude Code et Cursor : `curl -sL https://raw.githubusercontent.com/uccellolabs/pdf-print-ready/main/install.sh | bash`.
+
+Le script demande Google Chrome ou Chromium, et `pdftoppm` pour les aperçus (`brew install poppler`). Pas de dépendance Python.
 
 ### Cursor
 
@@ -61,7 +68,14 @@ Ou en délégation depuis un autre skill ou workflow :
 "Fais-en un livrable A4 propre"
 ```
 
-Le skill lance une mini-interview (5 questions max) si le contenu n'est pas déjà structuré, génère le HTML autonome, et donne les instructions pour produire le PDF via Chrome.
+Le skill lance une mini-interview (5 questions max) si le contenu n'est pas déjà structuré, génère le HTML autonome, puis mesure et imprime :
+
+```bash
+python3 ~/.claude/skills/pdf-print-ready/scripts/rendre_pdf.py livrable.html --audit    # pendant le calage
+python3 ~/.claude/skills/pdf-print-ready/scripts/rendre_pdf.py livrable.html            # audit + PDF + aperçus
+```
+
+Le rapport dit, page par page, le remplissage (cible 80 à 95 %), le débordement en hauteur et en largeur, les textes rendus sous 9,5 px, SVG compris, et les textes de schéma qui chevauchent, sortent du cadre ou débordent d'une boîte. Pour le document : pages du PDF contre sections, tirets cadratins, classes sans règle CSS, polices non chargées.
 
 ## Exemple de rendu
 

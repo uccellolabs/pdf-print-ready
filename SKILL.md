@@ -1,6 +1,6 @@
 ---
 name: pdf-print-ready
-description: Scaffold un HTML print-ready pour générer un PDF A4 propre. Pages figées 297mm avec overflow contrôlé, structure flexbox content+footer (zéro vide forcé), numérotation auto via JS (plus jamais en dur), pré-checks anti-erreurs (em-dash, identité légale sourcée, créneaux calendrier vérifiés, chiffres marché sourcés ou retirés). À utiliser pour tout livrable destiné PDF imprimable : note d'intention, proposition commerciale, pitch deck, lead magnet, contrat, brief partenaire, mémo officiel, étude de cas, compte-rendu de RDV formel.
+description: Scaffold un HTML print-ready pour générer un PDF A4 propre. Pages figées 297mm avec overflow contrôlé, structure flexbox content+footer (zéro vide forcé), numérotation auto via JS (plus jamais en dur), pré-checks anti-erreurs (em-dash, identité légale sourcée, créneaux calendrier vérifiés, chiffres marché sourcés ou retirés), et un script `scripts/rendre_pdf.py` qui mesure le débordement de chaque page dans le DOM, imprime le PDF en headless et rend un aperçu par page. À utiliser pour tout livrable destiné PDF imprimable : note d'intention, proposition commerciale, pitch deck, lead magnet, contrat, brief partenaire, mémo officiel, étude de cas, compte-rendu de RDV formel.
 metadata:
   trigger: générer un PDF, imprimer en PDF, livrable PDF, document imprimable, note d'intention, contrat, brief partenaire, mémo officiel, lead magnet PDF, proposition commerciale PDF, pitch deck PDF, étude de cas PDF
   license: MIT
@@ -116,17 +116,35 @@ Chaque page suit la structure :
 
 **Règle d'or** : `data-sheet-num` reste vide en HTML. Le script JS le remplit automatiquement à `01 / 13`, `02 / 13`, etc. Plus jamais de numéro en dur.
 
-### Étape 4 : calibration du contenu
+### Étape 4 : calibration du contenu, mesurée
 
 Chaque page doit remplir ~80-95% de la hauteur A4. Si une section dépasse, splitter en 2 pages. Si une section fait moins de 60%, soit accepter un blanc sobre en bas, soit consolider avec la section suivante.
 
-**Test de débordement** : avec `overflow: hidden` sur `.page`, le contenu qui dépasse est tronqué visuellement à l'écran. Si tronqué → splitter ou compacter, pas bricoler le CSS.
+**Le débordement ne se juge pas à l'œil, il se mesure.** Le script du skill le fait avec Chrome en headless :
 
-### Étape 5 : pre-livraison
+```bash
+python3 scripts/rendre_pdf.py livrable.html --audit
+```
 
-1. Vérifier que le HTML s'ouvre dans Chrome sans erreur console.
-2. Tester ⌘P et vérifier le rendu PDF : pas d'em-dash, numérotation correcte, pas de coupures malheureuses, palette respectée.
-3. Logguer l'action dans le journal de session du projet si l'utilisateur en a un.
+Il rend, page par page, le remplissage, le débordement en hauteur et en largeur, les textes rendus sous 9,5 px (y compris dans les SVG, dont la taille réelle dépend du `viewBox`), et les défauts de schéma : un texte qui chevauche un autre texte, qui sort du cadre du SVG ou qui déborde de sa boîte. Boucle : corriger, relancer, jusqu'à ce que chaque page soit `ok`. Quand une page déborde sans qu'on sache où couper, `--detail` donne la hauteur de chaque bloc :
+
+```bash
+python3 scripts/rendre_pdf.py livrable.html --audit --detail
+```
+
+Cinq à huit passes sont normales sur un document de dix pages. C'est moins long que de deviner.
+
+### Étape 5 : impression et contrôle visuel
+
+```bash
+python3 scripts/rendre_pdf.py livrable.html
+```
+
+Une commande : l'audit, le PDF (à côté du HTML, même nom), et un aperçu PNG de chaque page dans `<nom>_pages/`. Le code de retour vaut 1 si une page déborde ou si le PDF compte plus de pages que de sections, ce qui permet de l'enchaîner dans un script.
+
+Puis **ouvrir les aperçus un par un**. La mesure ne voit ni un libellé qui en chevauche un autre, ni une colonne de tableau tronquée par `overflow-x`, ni une légende coupée au bord d'un SVG : seul l'œil les voit, et c'est le seul moment où il est indispensable. Corriger, relancer la commande, et livrer le PDF qu'elle produit.
+
+Enfin, logguer l'action dans le journal de session du projet si l'utilisateur en a un.
 
 ---
 
@@ -481,6 +499,117 @@ p.lead, .section-eyebrow + h2.section-title {
 .toc-page { color: var(--muted); font-size: 11px; }
 ```
 
+### Séparateur entre deux sous-sections d'une même page (OBLIGATOIRE si tu fusionnes)
+
+```css
+/* À DÉFINIR si tu utilises <div class="divider"></div>. Piège vécu : classe utilisée mais jamais stylée → séparateur invisible, sous-sections collées. */
+.divider { height: 0; border-top: 1px solid var(--border); margin: 19px 0; }
+```
+
+### Composants visuels (graphiques) : privilégier un visuel scannable à un paragraphe
+
+Règle : un graphique vaut mieux qu'un tableau dense, qui vaut mieux qu'un paragraphe. Toutes les valeurs restent sourcées/catégorisées.
+
+**Filet d'accent "takeaway"** (conclusion légère, à préférer au gros callout partout) :
+```css
+.takeaway { border-left: 3px solid var(--primary); padding: 2px 0 2px 14px; margin: 10px 0; }
+.takeaway .k { font-family: '{{header_font}}',sans-serif; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--primary); font-weight: 600; }
+.takeaway p { font-size: 12.5px; line-height: 1.5; margin: 3px 0 0; }
+```
+
+**Entonnoir** (TAM/SAM/SOM, ou conversion) en SVG + légende. Trapèzes décroissants, nombres au centre, légende à droite avec badges de catégorie :
+```html
+<div class="funnel-wrap">
+  <svg viewBox="0 0 280 270" role="img" aria-label="Entonnoir">
+    <polygon points="6,8 274,8 216,92 64,92" fill="#93C5FD"/>
+    <polygon points="70,104 210,104 178,188 102,188" fill="#3B82F6"/>
+    <polygon points="108,200 172,200 156,262 124,262" fill="#1E3A8A"/>
+    <text x="140" y="52" text-anchor="middle" font-weight="700" font-size="26" fill="#1E3A8A">~2 350</text>
+    <!-- niveaux 2 et 3 : texte blanc -->
+  </svg>
+  <div class="funnel-legend">
+    <div class="leg-row"><span class="leg-dot" style="background:#93C5FD"></span><div><div class="lt">Marché total <span class="badge ok">Vérifié</span></div><div class="ld">…</div></div></div>
+    <!-- … -->
+  </div>
+</div>
+```
+```css
+.funnel-wrap { display: flex; align-items: center; gap: 24px; margin: 14px 0; }
+.funnel-wrap svg { flex: 0 0 280px; }
+.funnel-legend { flex: 1; display: flex; flex-direction: column; gap: 16px; }
+.leg-row { display: flex; gap: 12px; align-items: flex-start; }
+.leg-dot { flex: 0 0 12px; width: 12px; height: 12px; border-radius: 3px; margin-top: 3px; }
+.leg-row .lt { font-family: '{{header_font}}',sans-serif; font-weight: 600; font-size: 12.5px; }
+.leg-row .ld { font-size: 11px; color: var(--muted); line-height: 1.45; margin-top: 2px; }
+```
+
+**Carte 2×2 de positionnement** (deux axes, la case gagnante en vert) :
+```css
+.pmap { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 12px 0 4px; }
+.pmap .q { border: 1px solid var(--border); border-radius: 8px; padding: 11px 13px; min-height: 74px; }
+.pmap .q .qh { font-family: '{{header_font}}',sans-serif; font-weight: 600; font-size: 11px; margin-bottom: 3px; }
+.pmap .q p { font-size: 10.5px; color: var(--muted); line-height: 1.4; margin: 0; }
+.pmap .q.win { background: #ECFDF5; border-color: #A7F3D0; } .pmap .q.win .qh { color: #047857; }
+.pmap .q.warn { background: #FFFBEB; border-color: #FDE68A; } .pmap .q.warn .qh { color: #B45309; }
+.axis-x { text-align: center; font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-top: 4px; }
+```
+
+**Frise temporelle** (amorçage + portes de décision ; `.gate` = jalon de décision en orange) :
+```css
+.timeline { display: flex; margin: 16px 0; }
+.tl-step { flex: 1; position: relative; padding: 0 8px; text-align: center; }
+.tl-step::before { content: ""; position: absolute; top: 7px; left: 0; right: 0; height: 2px; background: var(--border); }
+.tl-step:first-child::before { left: 50%; } .tl-step:last-child::before { right: 50%; }
+.tl-dot { position: relative; width: 14px; height: 14px; border-radius: 50%; background: var(--primary); margin: 0 auto 8px; border: 2px solid #fff; box-shadow: 0 0 0 1.5px var(--primary); }
+.tl-step.gate .tl-dot { background: var(--warning); box-shadow: 0 0 0 1.5px var(--warning); }
+.tl-week { font-family: '{{header_font}}',sans-serif; font-weight: 600; font-size: 10px; color: var(--primary); }
+.tl-lab { font-size: 9.5px; color: var(--muted); line-height: 1.35; margin-top: 2px; }
+```
+
+**Cartes de prix** (3 niveaux, la recommandée encadrée) :
+```css
+.pcards { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; margin: 12px 0; }
+.pcard { border: 1px solid var(--border); border-radius: 10px; padding: 13px; display: flex; flex-direction: column; }
+.pcard.reco { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary); position: relative; }
+.pcard .pc-tag { position: absolute; top: -9px; left: 13px; background: var(--primary); color: #fff; font-size: 8px; font-weight: 600; text-transform: uppercase; padding: 2px 8px; border-radius: 999px; }
+.pcard .pc-price { font-family: '{{header_font}}',sans-serif; font-weight: 700; font-size: 21px; margin: 4px 0 8px; }
+.pcard ul { margin: 0 0 0 15px; } .pcard li { font-size: 9.5px; line-height: 1.4; }
+```
+
+**Barres de score** (notes /N) et **barres de scénarios** :
+```css
+.sbar .sb-row { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.sbar .sb-lab { flex: 0 0 120px; font-size: 10.5px; }
+.sbar .sb-track { flex: 1; height: 9px; background: var(--bg-alt); border: 1px solid var(--border); border-radius: 999px; overflow: hidden; }
+.sbar .sb-fill { height: 100%; background: linear-gradient(90deg,var(--primary),var(--secondary)); }
+.sbar .sb-val { flex: 0 0 42px; text-align: right; font-family: '{{header_font}}',sans-serif; font-weight: 600; font-size: 10.5px; color: var(--primary); }
+.bars { display: flex; align-items: flex-end; gap: 18px; height: 130px; margin: 14px 0 6px; }
+.bar-col { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; }
+.bar-fill { width: 60%; border-radius: 6px 6px 0 0; background: linear-gradient(180deg,var(--secondary),var(--primary)); }
+.bar-cap { font-family: '{{header_font}}',sans-serif; font-weight: 700; font-size: 13px; margin-bottom: 4px; color: var(--primary); }
+.bar-lab { font-size: 9.5px; color: var(--muted); margin-top: 6px; text-align: center; line-height: 1.3; }
+```
+
+**Badges de catégorie** (à appliquer à chaque chiffre, cf. DELIVERABLE_STANDARD B1) :
+```css
+.badge { display: inline-block; font-size: 8.5px; font-weight: 600; padding: 1px 6px; border-radius: 999px; }
+.badge.ok { background: #ECFDF5; color: #047857; }   /* Vérifié (source indépendante) */
+.badge.est { background: #FFF7ED; color: #B45309; }  /* Estimé / source à pondérer */
+.badge.tbc { background: #EFF6FF; color: #1D4ED8; }  /* À confirmer terrain */
+.badge.cap { background: #F1F5F9; color: #475569; }  /* Capacité (choix de charge, PAS une donnée de marché) */
+```
+
+---
+
+## Remplir les pages : fusionner deux sous-sections (au lieu de demi-pages vides)
+
+Quand une section ne remplit qu'environ la moitié d'une page, regrouper deux sous-sections courtes sur une seule `.page` (séparées par `.divider`) plutôt que de laisser du blanc.
+
+- Une page fusionnée = un en-tête, un pied, deux sous-sections (chacune avec son eyebrow + titre), un `.divider` entre.
+- **Chrome cohérent (D2)** : l'en-tête (haut) et le pied (bas) doivent porter le **même libellé combiné** (ex. « Cartographie & positionnement »), jamais l'en-tête de A et le pied de B.
+- Ne fusionner que des paires dont le remplissage cumulé reste **≤ ~90 %** (laisser une marge ; `overflow:hidden` tronque sinon).
+- Mesurer le remplissage réel : `lastChild.getBoundingClientRect().bottom - content.top` rapporté à `content.clientHeight` (le conteneur flex remplit, le vide est SOUS le contenu).
+
 ---
 
 ## Pièges à éviter (anti-patterns documentés)
@@ -501,6 +630,24 @@ p.lead, .section-eyebrow + h2.section-title {
 
 8. **NE PAS saturer chaque page à 100%**. Viser 80-95%. Un peu d'air en bas est acceptable. Saturer = risque de débordement avec `overflow: hidden` qui tronquera le contenu.
 
+9. **NE PAS utiliser une classe CSS sans la définir**. Piège vécu : `<div class="divider">` employé 8 fois mais `.divider` jamais stylée → hauteur nulle, sous-sections collées. Vérifier que chaque classe du corps a une règle dans le `<style>`.
+
+10. **NE PAS laisser un en-tête et un pied incohérents sur une page fusionnée**. Si deux sous-sections partagent une page, le libellé du haut et du bas doivent coïncider (libellé combiné). Sinon le lecteur voit « Cartographie » en haut et « Positionnement » en bas sur la même page.
+
+11. **NE PAS descendre sous 9,5px**. Texte principal ~13px, secondaire ~11px, jamais moins de 9,5px (y compris tableaux de sources). Densifier l'espacement (marges) avant de rapetisser la police.
+
+12. **NE PAS juger le débordement à l'oeil**. Le mesurer page par page (DOM) : `content.scrollHeight - content.clientHeight > 2` OU bas du dernier enfant vs hauteur disponible. Le rendu écran trompe (overflow:auto), seul le print tronque. C'est ce que fait `scripts/rendre_pdf.py --audit`.
+
+13. **NE PAS réutiliser tel quel le CSS d'une page web responsive**. Une page A4 fait 794 px de large, et c'est cette largeur que Chrome donne aux media queries à l'impression. Un `@media (max-width: 900px)` prévu pour le mobile se déclenche donc sur chaque page : les grilles à deux colonnes s'empilent, tout déborde. Piège vécu le 10/09/2026 : quatre pages sur quatre en débordement, jusqu'à forcer `grid-template-columns` avec `!important` dans une surcouche A4. Écrire le CSS A4 sans media query de largeur, ou les neutraliser.
+
+14. **NE PAS mettre un SVG à demi-largeur sans recalculer la taille de son texte**. Un texte à 12 px dans un `viewBox` de 560 rendu sur 330 px s'imprime à 7 px. La taille effective vaut `font-size × (largeur rendue / largeur du viewBox)`. L'audit la calcule ; la règle des 9,5 px s'applique à cette taille-là. Solution : un graphique par ligne en pleine largeur avec un `viewBox` proche de la largeur rendue, ou des textes plus grands dans le `viewBox`.
+
+15. **NE PAS laisser une classe utilitaire écraser la police d'un tableau**. Piège vécu : `.small { font-size: 13px }` posé sur les références d'un tableau réglé à 10,5 px les a fait passer sur deux lignes. Dans une surcouche print, vérifier les classes de taille héritées de la version web.
+
+16. **NE PAS empiler des colonnes `white-space: nowrap` dans un tableau large**. Onze colonnes dont huit en nowrap laissent 130 px aux deux colonnes de texte, qui se replient sur cinq lignes. Fixer les largeurs (`table-layout: fixed` + `<colgroup>`), laisser les en-têtes passer sur deux lignes, remplacer les notes longues par un repère court.
+
+17. **Dans un schéma, un texte ne chevauche jamais rien et ne dépasse jamais une bordure.** Ni un autre texte, ni le cadre du SVG, ni la boîte qui le porte. Un libellé plus large que sa boîte, une légende coupée au bord droit, deux colonnes de texte qui se rejoignent : autant de défauts que la mesure de remplissage ne voit pas. Règle de construction : compter la largeur du texte (environ 0,5 em par caractère en sans, 0,6 em en mono) et dimensionner la boîte dessus, jamais l'inverse ; un texte trop long se coupe en deux lignes ou se raccourcit, il ne rétrécit pas. L'audit (`rendre_pdf.py`) signale ces trois cas par page, verdict `SCHEMA`, code de retour 1.
+
 ---
 
 ## Pre-flight checklist (à valider AVANT de remettre le livrable)
@@ -518,13 +665,36 @@ p.lead, .section-eyebrow + h2.section-title {
 - [ ] Créneaux horaires vérifiés calendrier (si RDV mentionnés)
 - [ ] Chiffres sourcés ou marqués "à mesurer / à confirmer"
 - [ ] Confidentialité respectée selon destination (interne / externe nominatif / externe public)
-- [ ] Chaque page calibrée 80-95% de la hauteur A4
+- [ ] `python3 scripts/rendre_pdf.py livrable.html` rend un code 0 : chaque page `ok` (80-95 %), aucun débordement en hauteur ni en largeur, autant de pages au PDF que de sections
+- [ ] Toutes les classes CSS utilisées sont définies (le rapport liste les classes fantômes type `.divider`)
+- [ ] Aucune police < 9,5px, taille effective des SVG comprise (le rapport les liste)
+- [ ] Aucune media query de largeur ne change la mise en page à 794 px (piège 13)
+- [ ] Dans les schémas, aucun texte ne chevauche un autre texte, ne sort du cadre du SVG ni ne déborde de sa boîte (verdict `SCHEMA` absent du rapport)
+- [ ] Les aperçus PNG ont été ouverts un par un : pas de libellé qui chevauche, pas de colonne tronquée
+- [ ] Pages fusionnées : en-tête = pied (libellé combiné), `.divider` visible entre sous-sections
+- [ ] Sommaire généré depuis le DOM (numéros réels), sous-entrées pour les pages fusionnées
+- [ ] Chaque chiffre porte un badge de catégorie (Vérifié / Estimé / À confirmer / Capacité)
+- [ ] Graphiques utilisés là où un visuel aide (entonnoir, 2×2, frise, cartes, barres) plutôt qu'un paragraphe
 
 ---
 
 ## Comment générer le PDF final
 
-Après génération du HTML, l'utilisateur ouvre le fichier dans Chrome puis :
+### Par le script (recommandé)
+
+```bash
+python3 scripts/rendre_pdf.py livrable.html
+python3 scripts/rendre_pdf.py livrable.html --pdf sortie.pdf --apercus apercus/ --dpi 80
+python3 scripts/rendre_pdf.py livrable.html --json      # pour un autre outil
+```
+
+Prérequis : Google Chrome ou Chromium (détecté sur macOS et dans le `PATH`, sinon `--chrome` ou la variable `CHROME`). Les aperçus demandent `pdftoppm` (`brew install poppler`) ; sans lui, le script produit l'audit et le PDF et le dit. Aucune dépendance Python.
+
+Ce que le script fait, dans l'ordre : il copie le HTML à côté de l'original avec un script d'audit injecté (les chemins relatifs restent valables), le charge dans Chrome headless à 794 px de large pour que les media queries soient celles de l'impression, attend les polices, mesure, puis imprime avec `--print-to-pdf` sans en-tête ni pied, compte les pages du PDF et rend chaque page en PNG. La copie temporaire est effacée.
+
+### À la main (si Chrome headless n'est pas disponible)
+
+L'utilisateur ouvre le fichier dans Chrome puis :
 
 1. ⌘P (Cmd+P) pour ouvrir la boîte d'impression
 2. Destination : "Enregistrer au format PDF"
@@ -558,7 +728,7 @@ Un fichier HTML autonome (`<projet>/livrables/<NOM>.html`) avec :
 - CSS embarqué (pas de dépendance externe sauf Google Fonts)
 - Script JS embarqué (numérotation auto)
 - Contenu structuré en pages calibrées
-- Tests visuels passés (preview Chrome + impression PDF test)
+- Le PDF produit par `scripts/rendre_pdf.py`, avec son rapport à code 0, et les aperçus ouverts
 
 Logguer dans le journal de session du projet (si applicable) :
 ```
