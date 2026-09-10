@@ -18,6 +18,8 @@ Ce que l'audit mesure, par page :
   - les textes rendus sous 9,5 px, y compris dans les SVG mis à l'échelle par leur viewBox
   - dans les schémas SVG : un texte qui chevauche un autre texte, qui sort du cadre du SVG,
     ou qui déborde d'une boîte (rect) qu'il traverse
+  - les conteneurs à défilement (overflow auto, scroll, hidden) dont le contenu est coupé :
+    un tableau plus large que sa carte perd ses dernières colonnes sans que la page déborde
 Et pour le document :
   - le nombre de pages du PDF contre le nombre de sections .page (une différence = une page qui déborde)
   - les tirets cadratins (U+2014), proscrits en français
@@ -158,6 +160,25 @@ AUDIT_JS = r"""
       return defauts;
     }
 
+    // un conteneur à défilement (overflow auto/scroll/hidden) masque ce qui déborde : la page ne le voit pas,
+    // le lecteur du PDF non plus, la colonne est juste coupée
+    function tronques(page){
+      var res = [];
+      Array.prototype.forEach.call(page.querySelectorAll('*'), function(el){
+        if (el.closest('#__audit_pages') || el.classList.contains('page-content') || el === page) return;
+        var cs = getComputedStyle(el);
+        var ox = cs.overflowX, oy = cs.overflowY;
+        if (!/(auto|scroll|hidden)/.test(ox) && !/(auto|scroll|hidden)/.test(oy)) return;
+        var dx = el.scrollWidth - el.clientWidth, dy = el.scrollHeight - el.clientHeight;
+        if (dx > 2 || dy > 2) {
+          var nom = el.className && typeof el.className === 'string' && el.className.trim() ? '.' + el.className.trim().split(/\s+/)[0] : el.tagName.toLowerCase();
+          var titre = el.querySelector && el.querySelector('th, h3, h2, caption'); titre = titre ? titre.textContent.trim().replace(/\s+/g, ' ').slice(0, 30) : '';
+          res.push({conteneur: nom, largeur: Math.max(0, Math.round(dx)), hauteur: Math.max(0, Math.round(dy)), repere: titre});
+        }
+      });
+      return res;
+    }
+
     function blocs(node, profondeur){
       var res = [];
       Array.prototype.forEach.call(node.children, function(k){
@@ -190,6 +211,7 @@ AUDIT_JS = r"""
       };
       var pt = petitsTextes(page); p.police_min = pt.min; p.petits_textes = pt.petits.slice(0, 6); p.nb_petits_textes = pt.petits.length;
       var ds = defautsSchemas(page); p.defauts_schemas = ds.slice(0, 8); p.nb_defauts_schemas = ds.length;
+      var tr = tronques(page); p.tronques = tr.slice(0, 6); p.nb_tronques = tr.length;
       if (%(detail)s) p.blocs = blocs(c, 0);
       out.pages.push(p);
     });
@@ -287,6 +309,8 @@ def apercus(pdf_path, dossier, dpi):
 def verdict(p):
     if p["deborde_hauteur"] > 2 or p["deborde_largeur"] > 2:
         return "DEBORDE"
+    if p.get("nb_tronques"):
+        return "TRONQUE"
     if p.get("nb_defauts_schemas"):
         return "SCHEMA"
     if p.get("couverture"):
@@ -302,11 +326,11 @@ def rapport(audit, pdf_path=None, nb_pdf=None, images=None, note_apercus=None, d
     lignes = []
     w = lignes.append
     w("AUDIT DES PAGES")
-    w("  cible : remplissage entre %d et %d %%, aucun débordement, aucun texte sous %s px, aucun texte de schéma qui chevauche ou déborde" % (CIBLE_MIN, CIBLE_MAX, str(SEUIL_POLICE).replace(".", ",")))
+    w("  cible : remplissage entre %d et %d %%, aucun débordement, rien de coupé, aucun texte sous %s px, aucun texte de schéma qui chevauche ou déborde" % (CIBLE_MIN, CIBLE_MAX, str(SEUIL_POLICE).replace(".", ",")))
     w("")
     for p in audit["pages"]:
         v = verdict(p)
-        marque = {"DEBORDE": "!!", "SCHEMA": "!!", "serré": " !", "creux": " ~", "ok": "  ", "couv.": "  "}[v]
+        marque = {"DEBORDE": "!!", "SCHEMA": "!!", "TRONQUE": "!!", "serré": " !", "creux": " ~", "ok": "  ", "couv.": "  "}[v]
         extra = []
         if p["deborde_hauteur"] > 2:
             extra.append("déborde de %d px en hauteur" % p["deborde_hauteur"])
@@ -316,6 +340,8 @@ def rapport(audit, pdf_path=None, nb_pdf=None, images=None, note_apercus=None, d
             extra.append("%d texte(s) sous %s px, min %s px" % (p["nb_petits_textes"], SEUIL_POLICE, p["police_min"]))
         if p.get("nb_defauts_schemas"):
             extra.append("%d défaut(s) de schéma : un texte chevauche, sort du cadre ou déborde d'une boîte" % p["nb_defauts_schemas"])
+        if p.get("nb_tronques"):
+            extra.append("%d conteneur(s) à défilement dont le contenu est coupé (tableau trop large, colonne masquée)" % p["nb_tronques"])
         if not p["a_page_content"]:
             extra.append("pas de .page-content, mesure sur .page")
         w("%s page %02d  %3s %%  %-8s %s" % (marque, p["index"], p["remplissage"] if p["remplissage"] is not None else "?", v, p["libelle"][:60]))
@@ -323,6 +349,8 @@ def rapport(audit, pdf_path=None, nb_pdf=None, images=None, note_apercus=None, d
             w("           - " + e)
         for t in p["petits_textes"][:3]:
             w("             « %s » %s px%s" % (t["texte"], t["taille"], " (svg, mis à l'échelle)" if t["svg"] else ""))
+        for t in p.get("tronques", [])[:4]:
+            w("             %s%s : coupé de %d px en largeur, %d px en hauteur" % (t["conteneur"], (" (" + t["repere"] + ")") if t["repere"] else "", t["largeur"], t["hauteur"]))
         for d in p.get("defauts_schemas", [])[:6]:
             w("             %s : « %s »%s" % (d["type"], d["texte"], (" et « %s »" % d["autre"]) if d.get("autre") else ""))
         if detail and p.get("blocs"):
@@ -403,7 +431,7 @@ def main():
             except subprocess.CalledProcessError as e:
                 note = "pdftoppm a échoué : %s" % e
 
-    deborde = any(verdict(p) in ("DEBORDE", "SCHEMA") for p in audit["pages"]) or (nb_pdf is not None and nb_pdf != audit["doc"]["sections"])
+    deborde = any(verdict(p) in ("DEBORDE", "SCHEMA", "TRONQUE") for p in audit["pages"]) or (nb_pdf is not None and nb_pdf != audit["doc"]["sections"])
     if a.json:
         audit["pdf"] = {"chemin": pdf_path, "pages": nb_pdf, "apercus": images, "note": note}
         audit["verdicts"] = {p["index"]: verdict(p) for p in audit["pages"]}

@@ -126,7 +126,7 @@ Chaque page doit remplir ~80-95% de la hauteur A4. Si une section dépasse, spli
 python3 scripts/rendre_pdf.py livrable.html --audit
 ```
 
-Il rend, page par page, le remplissage, le débordement en hauteur et en largeur, les textes rendus sous 9,5 px (y compris dans les SVG, dont la taille réelle dépend du `viewBox`), et les défauts de schéma : un texte qui chevauche un autre texte, qui sort du cadre du SVG ou qui déborde de sa boîte. Boucle : corriger, relancer, jusqu'à ce que chaque page soit `ok`. Quand une page déborde sans qu'on sache où couper, `--detail` donne la hauteur de chaque bloc :
+Il rend, page par page, le remplissage, le débordement en hauteur et en largeur, les conteneurs à défilement dont le contenu est coupé (un tableau plus large que sa carte perd ses dernières colonnes sans que la page déborde), les textes rendus sous 9,5 px (y compris dans les SVG, dont la taille réelle dépend du `viewBox`), et les défauts de schéma : un texte qui chevauche un autre texte, qui sort du cadre du SVG ou qui déborde de sa boîte. Boucle : corriger, relancer, jusqu'à ce que chaque page soit `ok`. Quand une page déborde sans qu'on sache où couper, `--detail` donne la hauteur de chaque bloc :
 
 ```bash
 python3 scripts/rendre_pdf.py livrable.html --audit --detail
@@ -670,6 +670,7 @@ Quand une section ne remplit qu'environ la moitié d'une page, regrouper deux so
 - [ ] Aucune police < 9,5px, taille effective des SVG comprise (le rapport les liste)
 - [ ] Aucune media query de largeur ne change la mise en page à 794 px (piège 13)
 - [ ] Dans les schémas, aucun texte ne chevauche un autre texte, ne sort du cadre du SVG ni ne déborde de sa boîte (verdict `SCHEMA` absent du rapport)
+- [ ] Aucun tableau ni bloc coupé par un `overflow` de conteneur (verdict `TRONQUE` absent du rapport)
 - [ ] Les aperçus PNG ont été ouverts un par un : pas de libellé qui chevauche, pas de colonne tronquée
 - [ ] Pages fusionnées : en-tête = pied (libellé combiné), `.divider` visible entre sous-sections
 - [ ] Sommaire généré depuis le DOM (numéros réels), sous-entrées pour les pages fusionnées
