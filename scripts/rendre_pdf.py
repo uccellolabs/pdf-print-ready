@@ -20,6 +20,12 @@ Ce que l'audit mesure, par page :
     ou qui déborde d'une boîte (rect) qu'il traverse
   - les conteneurs à défilement (overflow auto, scroll, hidden) dont le contenu est coupé :
     un tableau plus large que sa carte perd ses dernières colonnes sans que la page déborde
+  - le contenu qui sort de son cadre sans être coupé par lui : un bloc plus haut que la carte
+    qui le porte déborde par-dessus la bande suivante, laquelle le repeint avec son fond. Rien
+    ne dépasse de la page, rien n'est signalé comme tronqué, et le contenu a pourtant disparu.
+    Le cadre est ici tout ancêtre qui se voit : un fond, une bordure, ou un overflow qui coupe.
+    La limite mesurée est le trait de bordure, pas la boîte de contenu : mordre sur le
+    rembourrage est une marge choisie, sortir du trait ne l'est pas
 Et pour le document :
   - le nombre de pages du PDF contre le nombre de sections .page (une différence = une page qui déborde)
   - les tirets cadratins (U+2014), proscrits en français
@@ -27,7 +33,8 @@ Et pour le document :
   - les polices déclarées mais non chargées
   - les numéros de page restés vides
 
-Code de retour : 0 si tout passe, 1 si au moins une page déborde, si un schéma a un défaut,
+Code de retour : 0 si tout passe, 1 si au moins une page déborde, si un bloc sort de son cadre,
+si un schéma a un défaut,
 ou si le PDF a plus de pages que de sections, 2 si un outil manque (Chrome).
 
 Prérequis : Google Chrome (ou Chromium). Aperçus : pdftoppm (poppler), sinon ils sont sautés.
@@ -179,6 +186,53 @@ AUDIT_JS = r"""
       return res;
     }
 
+    function estCadre(el){
+      var cs = getComputedStyle(el);
+      if (/(auto|scroll|hidden)/.test(cs.overflowY) || /(auto|scroll|hidden)/.test(cs.overflowX)) return true;
+      var bg = cs.backgroundColor;
+      if (bg && bg !== 'transparent' && !/^rgba\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*,\s*0\s*\)$/.test(bg)) return true;
+      var cotes = ['Top', 'Right', 'Bottom', 'Left'];
+      for (var i = 0; i < 4; i++){
+        var w = parseFloat(cs['border' + cotes[i] + 'Width']) || 0;
+        var c = cs['border' + cotes[i] + 'Color'] || '';
+        if (w > 0 && !/^rgba\([^)]*,\s*0\s*\)$/.test(c)) return true;
+      }
+      return false;
+    }
+
+    // Un bloc plus haut que la carte qui le porte ne fait pas déborder la page : il passe
+    // par-dessus la bande suivante, qui le recouvre. Aucun autre contrôle ne le voit.
+    function horsCadre(page){
+      var fautifs = [], res = [];
+      Array.prototype.forEach.call(page.querySelectorAll('*'), function(el){
+        if (el.closest('#__audit_pages')) return;
+        var a = el.getBoundingClientRect();
+        if (!a.width && !a.height) return;
+        var cadre = null, n = el.parentElement;
+        while (n && n !== page.parentElement){ if (n === page || estCadre(n)) { cadre = n; break; } n = n.parentElement; }
+        if (!cadre) return;
+        // la limite est la bordure, pas la boîte de contenu : mordre sur le rembourrage
+        // est une marge de manoeuvre choisie par la mise en page, sortir du trait ne l'est pas
+        var cs = getComputedStyle(cadre), b = cadre.getBoundingClientRect();
+        var basLimite = b.bottom - (parseFloat(cs.borderBottomWidth) || 0);
+        var droiteLimite = b.right - (parseFloat(cs.borderRightWidth) || 0);
+        var db = a.bottom - basLimite, dd = a.right - droiteLimite;
+        if (db > 2 || dd > 2) fautifs.push({el: el, cadre: cadre, bas: db, droite: dd});
+      });
+      // ne garder que le plus extérieur : sinon un bloc fautif remonte avec tous ses enfants
+      var lot = fautifs.map(function(f){ return f.el; });
+      fautifs.forEach(function(f){
+        if (lot.indexOf(f.el.parentElement) !== -1) return;
+        function nom(e){ return (e.className && typeof e.className === 'string' && e.className.trim()) ? '.' + e.className.trim().split(/\s+/)[0] : e.tagName.toLowerCase(); }
+        res.push({
+          element: nom(f.el), cadre: nom(f.cadre),
+          bas: Math.max(0, Math.round(f.bas)), droite: Math.max(0, Math.round(f.droite)),
+          repere: (f.el.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 34)
+        });
+      });
+      return res;
+    }
+
     function blocs(node, profondeur){
       var res = [];
       Array.prototype.forEach.call(node.children, function(k){
@@ -212,6 +266,7 @@ AUDIT_JS = r"""
       var pt = petitsTextes(page); p.police_min = pt.min; p.petits_textes = pt.petits.slice(0, 6); p.nb_petits_textes = pt.petits.length;
       var ds = defautsSchemas(page); p.defauts_schemas = ds.slice(0, 8); p.nb_defauts_schemas = ds.length;
       var tr = tronques(page); p.tronques = tr.slice(0, 6); p.nb_tronques = tr.length;
+      var hc = horsCadre(page); p.hors_cadre = hc.slice(0, 6); p.nb_hors_cadre = hc.length;
       if (%(detail)s) p.blocs = blocs(c, 0);
       out.pages.push(p);
     });
@@ -311,6 +366,8 @@ def verdict(p):
         return "DEBORDE"
     if p.get("nb_tronques"):
         return "TRONQUE"
+    if p.get("nb_hors_cadre"):
+        return "HORS CADRE"
     if p.get("nb_defauts_schemas"):
         return "SCHEMA"
     if p.get("couverture"):
@@ -326,11 +383,11 @@ def rapport(audit, pdf_path=None, nb_pdf=None, images=None, note_apercus=None, d
     lignes = []
     w = lignes.append
     w("AUDIT DES PAGES")
-    w("  cible : remplissage entre %d et %d %%, aucun débordement, rien de coupé, aucun texte sous %s px, aucun texte de schéma qui chevauche ou déborde" % (CIBLE_MIN, CIBLE_MAX, str(SEUIL_POLICE).replace(".", ",")))
+    w("  cible : remplissage entre %d et %d %%, aucun débordement, rien de coupé, rien hors cadre, aucun texte sous %s px, aucun texte de schéma qui chevauche ou déborde" % (CIBLE_MIN, CIBLE_MAX, str(SEUIL_POLICE).replace(".", ",")))
     w("")
     for p in audit["pages"]:
         v = verdict(p)
-        marque = {"DEBORDE": "!!", "SCHEMA": "!!", "TRONQUE": "!!", "serré": " !", "creux": " ~", "ok": "  ", "couv.": "  "}[v]
+        marque = {"DEBORDE": "!!", "SCHEMA": "!!", "TRONQUE": "!!", "HORS CADRE": "!!", "serré": " !", "creux": " ~", "ok": "  ", "couv.": "  "}[v]
         extra = []
         if p["deborde_hauteur"] > 2:
             extra.append("déborde de %d px en hauteur" % p["deborde_hauteur"])
@@ -342,6 +399,8 @@ def rapport(audit, pdf_path=None, nb_pdf=None, images=None, note_apercus=None, d
             extra.append("%d défaut(s) de schéma : un texte chevauche, sort du cadre ou déborde d'une boîte" % p["nb_defauts_schemas"])
         if p.get("nb_tronques"):
             extra.append("%d conteneur(s) à défilement dont le contenu est coupé (tableau trop large, colonne masquée)" % p["nb_tronques"])
+        if p.get("nb_hors_cadre"):
+            extra.append("%d bloc(s) qui sortent de leur cadre sans être coupés par lui : recouverts par ce qui suit" % p["nb_hors_cadre"])
         if not p["a_page_content"]:
             extra.append("pas de .page-content, mesure sur .page")
         w("%s page %02d  %3s %%  %-8s %s" % (marque, p["index"], p["remplissage"] if p["remplissage"] is not None else "?", v, p["libelle"][:60]))
@@ -351,6 +410,11 @@ def rapport(audit, pdf_path=None, nb_pdf=None, images=None, note_apercus=None, d
             w("             « %s » %s px%s" % (t["texte"], t["taille"], " (svg, mis à l'échelle)" if t["svg"] else ""))
         for t in p.get("tronques", [])[:4]:
             w("             %s%s : coupé de %d px en largeur, %d px en hauteur" % (t["conteneur"], (" (" + t["repere"] + ")") if t["repere"] else "", t["largeur"], t["hauteur"]))
+        for h in p.get("hors_cadre", [])[:4]:
+            sens = []
+            if h["bas"]: sens.append("%d px sous le bas" % h["bas"])
+            if h["droite"]: sens.append("%d px après le bord droit" % h["droite"])
+            w("             %s sort de %s : %s%s" % (h["element"], h["cadre"], ", ".join(sens), (" · « %s »" % h["repere"]) if h["repere"] else ""))
         for d in p.get("defauts_schemas", [])[:6]:
             w("             %s : « %s »%s" % (d["type"], d["texte"], (" et « %s »" % d["autre"]) if d.get("autre") else ""))
         if detail and p.get("blocs"):
@@ -431,7 +495,7 @@ def main():
             except subprocess.CalledProcessError as e:
                 note = "pdftoppm a échoué : %s" % e
 
-    deborde = any(verdict(p) in ("DEBORDE", "SCHEMA", "TRONQUE") for p in audit["pages"]) or (nb_pdf is not None and nb_pdf != audit["doc"]["sections"])
+    deborde = any(verdict(p) in ("DEBORDE", "SCHEMA", "TRONQUE", "HORS CADRE") for p in audit["pages"]) or (nb_pdf is not None and nb_pdf != audit["doc"]["sections"])
     if a.json:
         audit["pdf"] = {"chemin": pdf_path, "pages": nb_pdf, "apercus": images, "note": note}
         audit["verdicts"] = {p["index"]: verdict(p) for p in audit["pages"]}

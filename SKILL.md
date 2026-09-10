@@ -126,7 +126,7 @@ Chaque page doit remplir ~80-95% de la hauteur A4. Si une section dépasse, spli
 python3 scripts/rendre_pdf.py livrable.html --audit
 ```
 
-Il rend, page par page, le remplissage, le débordement en hauteur et en largeur, les conteneurs à défilement dont le contenu est coupé (un tableau plus large que sa carte perd ses dernières colonnes sans que la page déborde), les textes rendus sous 9,5 px (y compris dans les SVG, dont la taille réelle dépend du `viewBox`), et les défauts de schéma : un texte qui chevauche un autre texte, qui sort du cadre du SVG ou qui déborde de sa boîte. Boucle : corriger, relancer, jusqu'à ce que chaque page soit `ok`. Quand une page déborde sans qu'on sache où couper, `--detail` donne la hauteur de chaque bloc :
+Il rend, page par page, le remplissage, le débordement en hauteur et en largeur, les conteneurs à défilement dont le contenu est coupé (un tableau plus large que sa carte perd ses dernières colonnes sans que la page déborde), les blocs qui sortent de leur cadre sans être coupés par lui (verdict `HORS CADRE`, voir le piège 14), les textes rendus sous 9,5 px (y compris dans les SVG, dont la taille réelle dépend du `viewBox`), et les défauts de schéma : un texte qui chevauche un autre texte, qui sort du cadre du SVG ou qui déborde de sa boîte. Boucle : corriger, relancer, jusqu'à ce que chaque page soit `ok`. Quand une page déborde sans qu'on sache où couper, `--detail` donne la hauteur de chaque bloc :
 
 ```bash
 python3 scripts/rendre_pdf.py livrable.html --audit --detail
@@ -638,6 +638,8 @@ Quand une section ne remplit qu'environ la moitié d'une page, regrouper deux so
 
 12. **NE PAS juger le débordement à l'oeil**. Le mesurer page par page (DOM) : `content.scrollHeight - content.clientHeight > 2` OU bas du dernier enfant vs hauteur disponible. Le rendu écran trompe (overflow:auto), seul le print tronque. C'est ce que fait `scripts/rendre_pdf.py --audit`.
 
+14. **NE PAS croire un rapport « aucun débordement » sur une mise en page en colonnes.** Le contrôle de page mesure `.page`, et le contrôle de troncature ne regarde que les conteneurs dont l'`overflow` calculé vaut `hidden`, `auto` ou `scroll`. Une carte en `overflow: visible` dans une grille échappe aux deux : son contenu ne fait pas déborder la page, il sort par le bas et **la bande suivante le repeint avec son fond**. Rien n'est signalé, et le contenu a pourtant disparu du PDF. Piège vécu le 10/09/2026 sur un mémo A4 paysage à trois colonnes : un bloc entier manquait au rendu pendant que l'audit affichait « 97 %, aucun débordement ». Le contrôle qui l'attrape ne regarde pas l'`overflow` : il compare le rectangle de chaque élément à la **bordure** du plus proche ancêtre qui se voit (un fond, une bordure, ou un `overflow` qui coupe). C'est le verdict `HORS CADRE`. Corollaire de méthode : ajouter du contenu dans une colonne déjà pleine se vérifie, ne se suppose pas.
+
 13. **NE PAS réutiliser tel quel le CSS d'une page web responsive**. Une page A4 fait 794 px de large, et c'est cette largeur que Chrome donne aux media queries à l'impression. Un `@media (max-width: 900px)` prévu pour le mobile se déclenche donc sur chaque page : les grilles à deux colonnes s'empilent, tout déborde. Piège vécu le 10/09/2026 : quatre pages sur quatre en débordement, jusqu'à forcer `grid-template-columns` avec `!important` dans une surcouche A4. Écrire le CSS A4 sans media query de largeur, ou les neutraliser.
 
 14. **NE PAS mettre un SVG à demi-largeur sans recalculer la taille de son texte**. Un texte à 12 px dans un `viewBox` de 560 rendu sur 330 px s'imprime à 7 px. La taille effective vaut `font-size × (largeur rendue / largeur du viewBox)`. L'audit la calcule ; la règle des 9,5 px s'applique à cette taille-là. Solution : un graphique par ligne en pleine largeur avec un `viewBox` proche de la largeur rendue, ou des textes plus grands dans le `viewBox`.
@@ -671,6 +673,7 @@ Quand une section ne remplit qu'environ la moitié d'une page, regrouper deux so
 - [ ] Aucune media query de largeur ne change la mise en page à 794 px (piège 13)
 - [ ] Dans les schémas, aucun texte ne chevauche un autre texte, ne sort du cadre du SVG ni ne déborde de sa boîte (verdict `SCHEMA` absent du rapport)
 - [ ] Aucun tableau ni bloc coupé par un `overflow` de conteneur (verdict `TRONQUE` absent du rapport)
+- [ ] Aucun bloc ne sort de la bordure du cadre qui le porte (verdict `HORS CADRE` absent du rapport)
 - [ ] Les aperçus PNG ont été ouverts un par un : pas de libellé qui chevauche, pas de colonne tronquée
 - [ ] Pages fusionnées : en-tête = pied (libellé combiné), `.divider` visible entre sous-sections
 - [ ] Sommaire généré depuis le DOM (numéros réels), sous-entrées pour les pages fusionnées
