@@ -49,6 +49,43 @@ Tu **ne rédiges pas le contenu** du livrable. Tu produis le contenant et tu int
 
 ## Workflow
 
+**Un document se fabrique en phases, et chaque phase se ferme avant d'ouvrir la suivante.**
+Une phase se ferme par un contrôle, pas par une impression de fini : tant que le contrôle
+n'a pas tourné, « c'est terminé » est un sentiment.
+
+| Phase | Ce qu'elle produit | Le contrôle qui la ferme |
+|---|---|---|
+| Le contenu | Le texte, validé sur le fond | La relecture de l'auteur. Ce skill ne rédige pas |
+| **Les schémas** | Chaque SVG, seul | `rendre_pdf.py <schema> --schema` |
+| La mise en page | Le HTML paginé | `rendre_pdf.py <document> --audit` |
+| L'impression | Le PDF | Les aperçus, ouverts un à un |
+
+**L'ordre n'est pas du confort, il suit les dépendances.** Un schéma repris après la mise en
+page fait repasser toute la mise en page : le recadrer change sa hauteur, donc le remplissage
+des pages, donc les coupes de texte décidées autour. Ce qui porte le reste se ferme en premier.
+
+### Fermer la phase des schémas
+
+```bash
+python3 scripts/rendre_pdf.py mon-schema.svg --schema
+python3 scripts/rendre_pdf.py mon-schema.svg --schema --largeur 120   # colonne étroite
+```
+
+Le schéma est posé seul sur une page A4, à la largeur réelle qu'il aura dans le document, et
+mesuré là. Ce que le contrôle attrape, et qu'aucune relecture visuelle ne donne de façon
+fiable :
+
+- **Un trait qui passe sous un mot.** Il ne chevauche aucun texte et ne déborde d'aucune boîte :
+  il ne se voit qu'à la lecture, et seulement quand on le cherche. Le tracé est échantillonné
+  point par point, pas approximé par sa boîte englobante, qui serait fausse en diagonale.
+- **Un texte trop petit à l'impression.** Un SVG réduit à la largeur d'une page imprime son
+  texte à `font-size × largeur rendue / largeur du viewBox` : du 15 px devient du 8,9 px. Le
+  rapport rend la taille effective **et le facteur à appliquer**, parce que corriger sans le
+  facteur revient à tâtonner.
+- Un texte qui sort du cadre, qui déborde de sa boîte, ou qui en chevauche un autre.
+
+Le code de sortie vaut 1 tant qu'un défaut reste : la phase n'est pas fermée.
+
 ### Étape 0 : détection contexte et inputs
 
 1. Si un `PROJECT_CONTEXT.md` (ou équivalent : brand-guidelines, design-tokens.json) existe dans le répertoire courant ou son arborescence parente, le lire pour récupérer le design system (palette, typo, nom de marque). Sinon utiliser un défaut sobre (palette neutre #1D4ED8 primaire, Space Grotesk + Inter).

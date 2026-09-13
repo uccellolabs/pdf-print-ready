@@ -142,9 +142,37 @@ AUDIT_JS = r"""
         var cadre = svg.getBoundingClientRect(); if (!cadre.width) return;
         var textes = Array.prototype.filter.call(svg.querySelectorAll('text'), function(t){ var r = t.getBoundingClientRect(); return r.width > 0 && r.height > 0 && t.textContent.trim(); });
         var rects = Array.prototype.filter.call(svg.querySelectorAll('rect'), function(r){ var b = r.getBoundingClientRect(); return b.width > 4 && b.height > 4 && !r.closest('defs') && !r.closest('clipPath') && !r.closest('pattern'); });
+        // un trait qui passe sous un mot ne chevauche aucun texte et ne déborde
+        // d'aucune boîte : il ne se voit qu'à la lecture. On échantillonne le
+        // tracé plutôt que sa boîte englobante, qui serait fausse en diagonale.
+        var traits = Array.prototype.filter.call(svg.querySelectorAll('line, path, polyline'), function(l){
+          if (l.closest('defs') || l.closest('marker') || l.closest('clipPath')) return false;
+          return typeof l.getTotalLength === 'function' && l.getTotalLength() > 4;
+        });
+        var ctm = svg.getScreenCTM();
+        var points = [];
+        if (ctm) traits.forEach(function(l){
+          var L = l.getTotalLength(), n = Math.min(120, Math.max(12, Math.round(L / 3)));
+          for (var k = 0; k <= n; k++) {
+            var q = l.getPointAtLength(L * k / n);
+            var pt = svg.createSVGPoint(); pt.x = q.x; pt.y = q.y;
+            var e = pt.matrixTransform(ctm);
+            points.push({x: e.x, y: e.y, el: l});
+          }
+        });
+
         textes.forEach(function(t, i){
           var a = t.getBoundingClientRect();
           if (!dedans(a, cadre)) defauts.push({type: 'hors cadre', texte: extrait(t)});
+          // 1,5 px de tolérance : un trait qui frôle une lettre ne gêne pas.
+          var M = 1.5;
+          for (var k = 0; k < points.length; k++) {
+            var q = points[k];
+            if (q.x > a.left + M && q.x < a.right - M && q.y > a.top + M && q.y < a.bottom - M) {
+              defauts.push({type: 'traverse', texte: extrait(t)});
+              break;
+            }
+          }
           for (var j = i + 1; j < textes.length; j++) {
             var b = textes[j].getBoundingClientRect();
             var dx = Math.min(a.right, b.right) - Math.max(a.left, b.left);
@@ -279,6 +307,55 @@ AUDIT_JS = r"""
 })();
 </script>
 """
+
+
+# Une phase se ferme par son propre contrôle. Celle des schémas n'en avait pas :
+# il fallait intégrer le schéma dans le document pour le mesurer, donc le
+# découvrir faux après avoir bâti la mise en page dessus. Ce gabarit donne au
+# schéma une page à sa vraie largeur d'impression, et rien d'autre.
+GABARIT_SCHEMA = """<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8">
+<title>contrôle de schéma</title>
+<style>
+ @page{size:210mm 297mm;margin:0}
+ *{box-sizing:border-box;margin:0;padding:0}
+ body{font-family:Arial,Helvetica,sans-serif;background:#fff;color:#333}
+ .page{width:210mm;height:297mm;padding:20mm %(marge)smm;display:flex;flex-direction:column;overflow:hidden}
+ .page-content{flex:1 1 auto;min-height:0;overflow:hidden}
+ .page-content svg{width:100%%;height:auto;max-height:%(hauteur)smm}
+ .page-footer{flex:0 0 auto;margin-top:auto;min-height:6mm}
+</style></head><body>
+<section class="page"><div class="page-content">
+%(schema)s
+</div><footer class="page-footer"></footer></section>
+</body></html>"""
+
+
+def page_de_schema(fragment, largeur_mm, hauteur_mm):
+    """Le fragment (un SVG, ou un HTML qui en contient) posé seul sur une page A4."""
+    return GABARIT_SCHEMA % {
+        "marge": round((210 - largeur_mm) / 2.0, 2),
+        "hauteur": hauteur_mm,
+        "schema": fragment,
+    }
+
+
+def conseil_de_taille(pages, largeur_mm):
+    """Ce qu'il faudrait écrire dans le viewBox pour tenir le seuil de lisibilité.
+
+    Un SVG réduit à la largeur d'une page imprime son texte à
+    `font-size × largeur rendue / largeur du viewBox`. Le rapport rend donc la
+    taille effective et le facteur, parce que corriger sans le facteur revient à
+    tâtonner.
+    """
+    p = pages[0] if pages else {}
+    mini = p.get("police_min")
+
+    if not mini or mini >= SEUIL_POLICE:
+        return None
+
+    return ("Textes trop petits à l'impression : %.1f px pour un seuil de %.1f. "
+            "Multiplier les font-size du schéma par %.2f, ou resserrer le viewBox "
+            "d'autant." % (mini, SEUIL_POLICE, SEUIL_POLICE / mini))
 
 
 def trouver_chrome(explicite=None):
@@ -451,6 +528,63 @@ def rapport(audit, pdf_path=None, nb_pdf=None, images=None, note_apercus=None, d
     return "\n".join(lignes)
 
 
+def controler_schema(chrome_bin, chemin, largeur_mm, hauteur_mm):
+    """Rend (audit, page_html_temporaire) pour un schéma seul."""
+    fragment = open(chemin, encoding="utf-8").read()
+
+    with tempfile.NamedTemporaryFile("w", suffix=".html", delete=False, encoding="utf-8") as fh:
+        fh.write(page_de_schema(fragment, largeur_mm, hauteur_mm))
+        page = fh.name
+
+    try:
+        return auditer(chrome_bin, page), page
+    finally:
+        pass
+
+
+def rapport_schema(audit, chemin, largeur_mm):
+    """Ce que le contrôle d'un schéma doit dire, et rien d'autre."""
+    pages = audit.get("pages") or []
+    p = pages[0] if pages else {}
+    lignes = ["CONTRÔLE DU SCHÉMA : %s" % os.path.basename(chemin),
+              "  rendu sur une largeur de %g mm, celle d'une page A4 reliée" % largeur_mm,
+              ""]
+
+    defauts = p.get("defauts_schemas") or []
+
+    if defauts:
+        lignes.append("  %d défaut(s) de tracé :" % p.get("nb_defauts_schemas", len(defauts)))
+        for d in defauts:
+            if d.get("type") == "chevauche":
+                lignes.append("    chevauche : « %s » et « %s »" % (d.get("texte"), d.get("autre")))
+            elif d.get("type") == "hors cadre":
+                lignes.append("    hors cadre : « %s »" % d.get("texte"))
+            elif d.get("type") == "traverse":
+                lignes.append("    un trait passe sous : « %s »" % d.get("texte"))
+            else:
+                lignes.append("    déborde d'une boîte : « %s » et « %s »"
+                              % (d.get("texte"), d.get("boite", "")))
+    else:
+        lignes.append("  tracé : aucun texte qui chevauche, sort du cadre ou déborde d'une boîte")
+
+    conseil = conseil_de_taille(pages, largeur_mm)
+
+    if conseil:
+        lignes += ["", "  " + conseil]
+        for t in (p.get("petits_textes") or [])[:5]:
+            lignes.append("    %s px  « %s »" % (t.get("taille"), t.get("texte")))
+    else:
+        lignes.append("  lisibilité : aucun texte sous %.1f px à l'impression" % SEUIL_POLICE)
+
+    if p.get("deborde_h") or p.get("deborde_l"):
+        lignes += ["", "  le schéma ne tient pas dans la page d'essai : réduire sa hauteur,"
+                       "  ou le passer en paysage"]
+
+    lignes += ["", "  Un schéma se ferme avant d'être posé dans un document : une reprise",
+               "  après coup fait repasser toute la mise en page bâtie dessus."]
+    return "\n".join(lignes)
+
+
 def main():
     ap = argparse.ArgumentParser(description="Mesure, imprime et prévisualise un HTML print-ready.")
     ap.add_argument("html", help="le fichier HTML paginé (.page > .page-content + .page-footer)")
@@ -462,12 +596,33 @@ def main():
     ap.add_argument("--dpi", type=int, default=70, help="résolution des aperçus (défaut 70, lisible et léger)")
     ap.add_argument("--chrome", help="chemin de Chrome ou Chromium (sinon $CHROME, puis détection)")
     ap.add_argument("--json", action="store_true", help="sortie JSON au lieu du rapport")
+    ap.add_argument("--schema", action="store_true",
+                    help="contrôle un schéma seul (fichier .svg ou fragment HTML), avant de le poser dans un document")
+    ap.add_argument("--largeur", type=float, default=150.0,
+                    help="largeur de rendu du schéma en mm pour --schema (défaut 150, une A4 avec marge de reliure)")
+    ap.add_argument("--hauteur", type=float, default=150.0,
+                    help="hauteur maximale du schéma en mm pour --schema (défaut 150)")
     a = ap.parse_args()
 
     if not os.path.isfile(a.html):
         print("fichier introuvable : " + a.html, file=sys.stderr)
         return 2
     chrome_bin = trouver_chrome(a.chrome)
+
+    if a.schema:
+        audit, page = controler_schema(chrome_bin, a.html, a.largeur, a.hauteur)
+        pages = audit.get("pages") or []
+        p = pages[0] if pages else {}
+        os.unlink(page)
+
+        if a.json:
+            print(json.dumps(audit, ensure_ascii=False, indent=1))
+        else:
+            print(rapport_schema(audit, a.html, a.largeur))
+
+        mauvais = bool(p.get("nb_defauts_schemas")) or (
+            p.get("police_min") is not None and p.get("police_min") < SEUIL_POLICE)
+        return 1 if mauvais else 0
     if not chrome_bin:
         print("Chrome ou Chromium introuvable. Indique-le avec --chrome ou la variable CHROME.", file=sys.stderr)
         return 2
