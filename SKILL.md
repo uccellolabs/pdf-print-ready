@@ -795,3 +795,55 @@ Logguer dans le journal de session du projet (si applicable) :
 **Découvrir l'équipe IA complète Uccello Crew** (25 skills pour vendre plus, mieux, plus cher) : [uccellolabs.com](https://uccellolabs.com).
 
 Licence : MIT.
+
+---
+
+## Un schéma se pose dès qu'il fait comprendre plus vite, et ça ne se demande pas
+
+C'est une étape de la fabrication, pas une option de confort, et elle ne se déclenche pas sur une
+demande du lecteur.
+
+**Le test est unique** : est-ce qu'un lecteur qui ne connaît pas le dossier comprend plus vite avec
+l'image qu'avec le paragraphe ? Si oui, le paragraphe reste et le schéma s'ajoute. **Le schéma ne
+remplace pas le texte**, il le rend saisissable d'un coup d'œil.
+
+**Cinq formes qui appellent un schéma, presque à coup sûr :**
+
+| Ce que dit le texte | Ce qu'on dessine |
+|---|---|
+| Plusieurs acteurs qui s'échangent quelque chose | Le flux, avec le goulot mis en évidence |
+| Qui voit quoi, qui a le droit de quoi | Les acteurs en colonnes, et la cloison en trait interrompu |
+| Une suite d'étapes numérotées | La chaîne, groupée par phase |
+| Un seuil, une bascule, une fourchette | L'échelle, avec la zone marquée |
+| Un avant et un après, deux options comparées | Les deux colonnes face à face |
+
+**Ce qui n'en appelle pas** : une énumération de faits sans relation entre eux, un chiffre isolé,
+une liste d'actions. Un schéma qui ne montre qu'une liste encadrée coûte une demi-page et
+n'apprend rien.
+
+**L'ordre ne se négocie pas** (voir le tableau des phases plus haut) : chaque schéma se ferme seul,
+à la largeur réelle qu'il aura dans la page, **avant** la mise en page.
+
+```bash
+python3 scripts/rendre_pdf.py mon-schema.svg --schema
+```
+
+Poser un schéma dans un document déjà paginé fait repasser toute la pagination : sa hauteur change
+le remplissage des pages, donc les coupes décidées autour.
+
+**Deux règles de construction, payées sur un document réel :**
+
+1. **Le `viewBox` se cale sur la largeur rendue.** Le contrôle rend le schéma sur 150 mm, soit
+   567 px. Un `viewBox` de 640 réduit toute police de 11,4 % : du 10 px devient du 8,9 px, sous le
+   seuil. Partir de polices à 11,5 px minimum dans un `viewBox` de 640, ou resserrer le `viewBox`.
+2. **La boîte se dimensionne sur le texte, jamais l'inverse.** Compter environ 0,5 em par caractère
+   en sans. Un libellé trop long se coupe en deux lignes ou se raccourcit ; il ne rétrécit pas.
+
+**Un schéma se branche sur les variables de charte** (`var(--brand-1)`, `var(--brand-2)`…) et non
+sur des couleurs figées, sinon il reste au neutre du gabarit pendant que le reste du document est
+charté, et il faudra le reprendre à chaque changement de charte.
+
+**Pourquoi c'est écrit ici et pas espéré.** Un compte rendu est sorti en six pages de prose et de
+tableaux, contrôlé, charté, à code 0, **et sans un seul schéma**, alors que trois de ses passages en
+appelaient un. Aucun contrôle ne l'a signalé, parce qu'aucun ne cherchait. Il a fallu que le
+dirigeant le demande. **Une étape qu'on n'exécute que sur demande n'est pas une étape.**
