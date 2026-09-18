@@ -241,6 +241,40 @@ mettre à jour pour tout le monde d'un seul endroit.
 
 ---
 
+## Répartir le contenu en pages, au lieu de le couper à l'estime
+
+**`scripts/rendre_pdf.py` mesure, il ne répartit pas.** Il dit ce qui déborde, ce qui est creux et
+ce qui est serré : c'est un constat, pas une coupe. Tant que la coupe se fait à la main, elle se
+refait **en entier** à chaque retouche du texte.
+
+Mesuré le 16/09/2026 sur deux documents mis en page le même jour : quinze pages remplies de 21 % à
+57 % pour la première version, deux recompositions manuelles pour arriver à onze pages correctes,
+et le même travail refait de zéro sur le second. Plus deux titres orphelins et un titre « suite »
+en double, **que la mesure ne voyait pas** parce que ces pages n'avaient rien d'anormal.
+
+```bash
+python3 scripts/repartir_pages.py <doc.html>              # le plan, rien n'est écrit
+python3 scripts/repartir_pages.py <doc.html> --appliquer  # écrit <doc>.pagine.html
+```
+
+**La convention d'entrée.** Le document porte **une seule page**, et dans sa zone de contenu un
+conteneur `data-flux` dont chaque enfant direct est un bloc. Un bloc ne se coupe jamais.
+
+- **`data-titre`** sur un bloc : il ne restera jamais seul en bas de page.
+- **`data-ensemble="<clé>"`** sur des blocs voisins : ils partent ensemble.
+
+**Le flux est mesuré dans une vraie page**, donc à la largeur réelle du contenu. Mesurer ailleurs
+donnerait des hauteurs fausses.
+
+**Un bloc plus haut qu'une page part seul et se signale, il ne se coupe pas** : le couper voudrait
+dire rédiger à la place de l'auteur.
+
+**Et le résultat se remesure après écriture**, jamais le seul calcul : les hauteurs changent quand
+les blocs se regroupent, une marge disparaît en haut de page, un titre suivi d'un tableau ne prend
+pas la même place qu'un titre suivi d'un paragraphe.
+
+---
+
 ## Comment générer le PDF final
 
 ### Par le script (recommandé)
