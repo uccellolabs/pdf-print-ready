@@ -64,6 +64,25 @@ h1, h2, h3, h4 {
   break-after: page;
 }
 
+/* Une page paysage, pour un tableau large. Les dimensions s'echangent, rien
+   d'autre ne change : la zone de contenu, le pied et la numerotation restent
+   les memes, et la mesure les voit pareil.
+
+   **Ne jamais obtenir un paysage en faisant tourner une page portrait**
+   (`transform: rotate`). La rotation ment a la mesure : le navigateur calcule
+   le debordement sur la boite avant rotation, donc une page qui deborde rend
+   « aucun debordement ». Un devis est parti quatre fois chez un client avec
+   une page debordant de 15 px, sur un gabarit paysage improvise. */
+.page.paysage {
+  width: 297mm;
+  height: 210mm;
+  min-height: 210mm;
+  max-height: 210mm;
+}
+
+@page paysage { size: A4 landscape; }
+.page.paysage { page: paysage; }
+
 .page-content {
   flex: 1 1 auto;
   min-height: 0;
